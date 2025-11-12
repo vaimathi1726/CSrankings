@@ -126,6 +126,8 @@ class CSRankings {
         }
     }
 
+
+
     constructor() {
         CSRankings.theInstance = this;
         this.navigoRouter = new Navigo(null, true);
@@ -543,6 +545,19 @@ class CSRankings {
 
     private areaDeptAdjustedCount: { [key: string]: number } = {}; /* area+dept */
 
+    private getMarginalColor(marginal: number, maxMarginal: number): string {
+        if (maxMarginal === 0) return '#95a5a6';
+        const ratio = marginal / maxMarginal;
+        if (ratio > 0.7) return '#2ecc71'; // green for high impact
+        if (ratio > 0.4) return '#f39c12'; // orange for medium
+        return '#95a5a6'; // gray for low
+    }
+
+    /* Per-faculty per-area adjusted counts (for marginal computation). */
+    private facultyAreaAdjustedCount: { [name: string]: { [area: string]: number } } = {};
+
+    /* Per-faculty marginal contribution to their department score. */
+    private facultyMarginal: { [name: string]: number } = {};
     private areaStringMap: { [key: string]: string } = {}; // name -> areaString (memoized)
 
     private usePieChart: boolean = false;
@@ -1219,6 +1234,13 @@ class CSRankings {
                 visited[name] = true;
                 facultycount[name] = 0;
                 facultyAdjustedCount[name] = 0;
+                // initialize per-area adjusted counts for this faculty
+                this.facultyAreaAdjustedCount[name] = {};
+                for (const a in this.areaDict) {
+                    if (this.areaDict.hasOwnProperty(a)) {
+                        this.facultyAreaAdjustedCount[name][a] = 0;
+                    }
+                }
                 if (!(dept in deptCounts)) {
                     deptCounts[dept] = 0;
                     deptNames[dept] = <Array<string>>[];
@@ -1228,6 +1250,11 @@ class CSRankings {
             }
             facultycount[name] += count;
             facultyAdjustedCount[name] += adjustedCount;
+            // accumulate per-area adjusted contribution for this faculty
+            if (!(area in this.facultyAreaAdjustedCount[name])) {
+                this.facultyAreaAdjustedCount[name][area] = 0;
+            }
+            this.facultyAreaAdjustedCount[name][area] += adjustedCount;
         }
     }
 
@@ -1274,11 +1301,13 @@ class CSRankings {
         }
         return numAreas;
     }
-
+    /* Store sort preferences per department */
+    private facultySortPreference: { [dept: string]: 'marginal' | 'adjusted' | 'pubs' | 'marginalpct' | 'adjpct' } = {};
     /* Build drop down for faculty names and paper counts. */
     private buildDropDown(deptNames: { [key: string]: Array<string> },
         facultycount: { [key: string]: number },
-        facultyAdjustedCount: { [key: string]: number })
+        facultyAdjustedCount: { [key: string]: number },
+        facultyMarginal?: { [key: string]: number })
         : { [key: string]: string } {
         let univtext: { [key: string]: string } = {};
 
@@ -1287,31 +1316,132 @@ class CSRankings {
                 continue;
             }
 
-            let p = '<div class="table"><table class="table table-sm table-striped"><thead><th></th><td><small><em>'
-                + '<abbr title="Click on an author\'s name to go to their home page.">Faculty</abbr></em></small></td>'
-                + '<td align="right"><small><em>&nbsp;&nbsp;<abbr title="Total number of publications (click for DBLP entry).">\#&nbsp;Pubs</abbr>'
-                + ' </em></small></td><td align="right"><small><em><abbr title="Count divided by number of co-authors">Adj.&nbsp;\#</abbr></em>'
-                + '</small></td></thead><tbody>';
+            const currentSort = this.facultySortPreference[dept] || 'adjusted';
+
+let p =
+  '<div class="table"><table class="table table-sm table-striped">' +
+  '<thead>' +
+    '<tr>' +
+      '<th></th>' +
+      '<th><small><em><abbr title="Click on an author\'s name to go to their home page.">Faculty</abbr></em></small></th>' +
+      
+      '<th align="right">' +
+        `<small><em><a href="#" onclick="csr.sortFaculty('${dept}', 'pubs'); return false;" ` +
+        `style="color: ${currentSort === 'pubs' ? '#0066cc' : '#4a5568'}; font-weight: ${currentSort === 'pubs' ? 'bold' : 'normal'}; text-decoration: underline; cursor: pointer;" ` +
+        `title="Click to sort by publication count">#&nbsp;Pubs${currentSort === 'pubs' ? ' ▼' : ''}</a></em></small>` +
+      '</th>' +
+      
+      '<th align="right">' +
+        `<small><em><a href="#" onclick="csr.sortFaculty('${dept}', 'adjusted'); return false;" ` +
+        `style="color: ${currentSort === 'adjusted' ? '#0066cc' : '#4a5568'}; font-weight: ${currentSort === 'adjusted' ? 'bold' : 'normal'}; text-decoration: underline; cursor: pointer;" ` +
+        `title="Click to sort by adjusted count">Adj.&nbsp;#${currentSort === 'adjusted' ? ' ▼' : ''}</a></em></small>` +
+      '</th>' +
+      
+      '<th align="right">' +
+        `<small><em><a href="#" onclick="csr.sortFaculty('${dept}', 'marginal'); return false;" ` +
+        `style="color: ${currentSort === 'marginal' ? '#0066cc' : '#4a5568'}; font-weight: ${currentSort === 'marginal' ? 'bold' : 'normal'}; text-decoration: underline; cursor: pointer;" ` +
+        `title="Click to sort by marginal contribution">Marginal&nbsp;Δ${currentSort === 'marginal' ? ' ▼' : ''}</a></em></small>` +
+      '</th>' +
+      
+      '<th align="right">' +
+        `<small><em><a href="#" onclick="csr.sortFaculty('${dept}', 'marginalpct'); return false;" ` +
+        `style="color: ${currentSort === 'marginalpct' ? '#0066cc' : '#4a5568'}; font-weight: ${currentSort === 'marginalpct' ? 'bold' : 'normal'}; text-decoration: underline; cursor: pointer;" ` +
+        `title="Click to sort by marginal percentage">Marginal&nbsp;%${currentSort === 'marginalpct' ? ' ▼' : ''}</a></em></small>` +
+      '</th>' +
+      
+      '<th align="right">' +
+        `<small><em><a href="#" onclick="csr.sortFaculty('${dept}', 'adjpct'); return false;" ` +
+        `style="color: ${currentSort === 'adjpct' ? '#0066cc' : '#4a5568'}; font-weight: ${currentSort === 'adjpct' ? 'bold' : 'normal'}; text-decoration: underline; cursor: pointer;" ` +
+        `title="Click to sort by adjusted percentage">Adj&nbsp;%${currentSort === 'adjpct' ? ' ▼' : ''}</a></em></small>` +
+      '</th>' +
+      
+    '</tr>' +
+  '</thead><tbody>';
+
+
+
             /* Build a dict of just faculty from this department for sorting purposes. */
             let fc: { [key: string]: number } = {};
             for (const name of deptNames[dept]) {
                 fc[name] = facultycount[name];
             }
             let keys = Object.keys(fc);
+            // Calculate max marginal for color scaling
+            const marginals = keys.map(name => facultyMarginal && (name in facultyMarginal) ? facultyMarginal[name] : 0);
+
+            const maxMarginalInDept = Math.max(0, ...marginals); // guard empty
+            //const maxMarginalInDept = Math.max(...marginals);
+            const sortBy = this.facultySortPreference[dept] || 'adjusted';
+
+const deptAdjTotal = deptNames[dept].reduce((sum, name) => 
+    sum + (facultyAdjustedCount[name] || 0), 0);
+
+const sortedEntries = keys.map((name) => {
+    const myAdj = facultyAdjustedCount[name] || 0;
+    const myMarginal = facultyMarginal?.[name] ?? 0;
+    const deptScore = this.stats[dept] || 1;
+    
+    return {
+        name,
+        pubs: fc[name] ?? 0,
+        adj: Math.round(10.0 * myAdj) / 10.0,
+        marginal: myMarginal,
+        marginalpct: deptScore > 0 ? (myMarginal / deptScore) * 100 : 0,
+        adjpct: deptAdjTotal > 0 ? (myAdj / deptAdjTotal) * 100 : 0
+    };
+}).sort((a, b) => {
+    let primaryDiff = 0;
+    
+    // Sort by the chosen metric (DESCENDING order)
+    switch(sortBy) {
+        case 'marginal':
+            primaryDiff = b.marginal - a.marginal;
+            break;
+        case 'adjusted':
+            primaryDiff = b.adj - a.adj;
+            break;
+        case 'pubs':
+            primaryDiff = b.pubs - a.pubs;
+            break;
+        case 'marginalpct':
+            primaryDiff = b.marginalpct - a.marginalpct;
+            break;
+        case 'adjpct':
+            primaryDiff = b.adjpct - a.adjpct;
+            break;
+    }
+    
+    if (primaryDiff !== 0) {
+        return primaryDiff;
+    }
+    
+    // Tiebreaker: alphabetical by name
+    return this.compareNames(a.name, b.name);
+});
+
+keys = sortedEntries.map(entry => entry.name);
+
+
+
+            /*
             keys.sort((a: string, b: string) => {
-                if (fc[b] === fc[a]) {
-                    // return this.compareNames(a, b);
-		    const fb = Math.round(10.0 * facultyAdjustedCount[b]) / 10.0;
-                    const fa = Math.round(10.0 * facultyAdjustedCount[a]) / 10.0;
-                    if (fb === fa) {
-                       return this.compareNames(a, b);
-                    } else {
-                       return fb - fa;
-		    }
-                } else {
-                    return fc[b] - fc[a];
+            if (fc[b] === fc[a]) {
+                const fb = Math.round(10.0 * (facultyAdjustedCount[b] || 0)) / 10.0;
+                const fa = Math.round(10.0 * (facultyAdjustedCount[a] || 0)) / 10.0;
+                if (fb === fa) {
+                const mb = facultyMarginal?.[b] ?? 0;
+                const ma = facultyMarginal?.[a] ?? 0;
+                if (mb !== ma) return mb - ma;      // higher marginal first
+                return this.compareNames(a, b);
                 }
+                return fb - fa;
+            }
+            return fc[b] - fc[a];
             });
+            */
+
+           
+
             for (const name of keys) {
 
                 const homePage = encodeURI(this.homepages[name]);
@@ -1360,16 +1490,47 @@ class CSRankings {
                     + "</small></td>"
                     + '<td align="right"><small>'
                     + (Math.round(10.0 * facultyAdjustedCount[name]) / 10.0).toFixed(1)
-                    + "</small></td></tr>"
-                    + "<tr><td colspan=\"4\">"
-                    + `<div class="csr-chart" id="${escape(name)}-chart">`
-                    + '</div>'
-                    + "</td></tr>"
-                    ;
-            }
-            p += "</tbody></table></div>";
-            univtext[dept] = p;
-        }
+                    + "</small></td>"
+
+
+
+
+const deptScore = this.stats[dept] || 1;
+
+
+let absMarginal = "0.0";
+let marginalPct = "0.0";
+let marginalTooltip = "";
+
+if (facultyMarginal && (name in facultyMarginal)) {
+  const m = facultyMarginal[name];       
+  absMarginal = m.toFixed(2);             
+  const pct = deptScore > 0 ? (m / deptScore) * 100 : 0;
+  marginalPct = pct.toFixed(1);
+  marginalTooltip = `Absolute drop: ${absMarginal} (from dept score ${deptScore.toFixed(2)})`;
+}
+
+
+p += `<td align="right"><small class="marginal-abs" title="${marginalTooltip}">${absMarginal}</small></td>`;
+
+
+p += `<td align="right"><small title="${marginalTooltip}">${marginalPct}%</small></td>`;
+
+
+const myAdj = facultyAdjustedCount[name] || 0;
+const sharePct = deptAdjTotal > 0 ? (myAdj / deptAdjTotal) * 100 : 0;
+p += `<td align="right"><small>${sharePct.toFixed(1)}%</small></td>`;
+
+
+p += '</tr>' +
+     `<tr><td colspan="7">` +
+       `<div class="csr-chart" id="${escape(name)}-chart"></div>` +
+     '</td></tr>';
+
+                        }
+                        p += "</tbody></table></div>";
+                        univtext[dept] = p;
+                    }
         return univtext;
     }
 
@@ -1377,17 +1538,19 @@ class CSRankings {
     private buildOutputString(numAreas: number,
         countryAbbrv: { [key: string]: string },
         deptCounts: { [key: string]: number },
+        deptNames: { [key: string]: Array<string> },
         univtext: { [key: string]: string },
-        minToRank: number): string {
+        minToRank: number, facultyMarginal?: { [key: string]: number }): string {
         let s = this.makePrologue();
         /* Show the top N (with more if tied at the end) */
 
         s = s + '<thead><tr><th align="left"><font color="#777">#</font></th><th align="left"><font color="#777">Institution</font>'
-            + '&nbsp;'.repeat(20)      /* Hopefully max length of an institution. */
-            + '</th><th align="right">'
-            + '<abbr title="Geometric mean count of papers published across all areas."><font color="#777">Count</font>'
-            + '</abbr></th><th align="right">&nbsp;<abbr title="Number of faculty who have published in these areas."><font color="#777">Faculty</font>'
-            + '</abbr></th></th></tr></thead>';
+    + '&nbsp;'.repeat(20)
+    + '</th><th align="right">'
+    + '<abbr title="Geometric mean count of papers published across all areas."><font color="#777">Count</font>'
+    + '</abbr></th><th align="right">&nbsp;<abbr title="Number of faculty who have published in these areas."><font color="#777">Faculty</font>'
+    + '</abbr></th><th align="right">&nbsp;<abbr title="Range of marginal contributions (min-max)"><font color="#777">Marginal Range</font>'
+    + '</abbr></th></tr></thead>';
 
         s = s + "<tbody>";
         /* As long as there is at least one thing selected, compute and display a ranking. */
@@ -1448,11 +1611,24 @@ class CSRankings {
 
                 s += `<td align="right">${(Math.round(10.0 * v) / 10.0).toFixed(1)}</td>`;
                 s += `<td align="right">${deptCounts[dept]}`; /* number of faculty */
+
+                // Add marginal range column
+                const deptFacultyMarginals = deptNames[dept]
+                    .map(name => (facultyMarginal && (name in facultyMarginal)) ? facultyMarginal[name] : 0)
+                    .filter(m => m > 0);
+
+                if (deptFacultyMarginals.length > 0) {
+                    const maxM = Math.max(...deptFacultyMarginals);
+                    const minM = Math.min(...deptFacultyMarginals);
+                    s += `<td align="right">${minM.toFixed(1)}-${maxM.toFixed(1)}</td>`;
+                } else {
+                    s += '<td align="right">-</td>';
+                }
                 s += "</td>";
                 s += "</tr>\n";
                 // style="width: 100%; height: 350px;" 
-                s += `<tr><td colspan="4"><div class="csr-chart" id="${esc}-chart"></div></td></tr>`;
-                s += `<tr><td colspan="4"><div style="display:none;" id="${esc}-faculty">${univtext[dept]}</div></td></tr>`;
+                s += `<tr><td colspan="5"><div class="csr-chart" id="${esc}-chart"></div></td></tr>`;
+                s += `<tr><td colspan="5"><div style="display:none;" id="${esc}-faculty">${univtext[dept]}</div></td></tr>`;
                 ties++;
                 oldv = v;
             }
@@ -1530,16 +1706,42 @@ class CSRankings {
             numAreas,
             currentWeights);
 
+        // Compute per-faculty marginal contribution to their department's score.
+        // Marginal = current_dept_score - dept_score_without_person
+        this.facultyMarginal = {};
+        if (numAreas > 0) {
+            for (const dept in deptNames) {
+                if (!deptNames.hasOwnProperty(dept)) continue;
+                for (const name of deptNames[dept]) {
+                    let prod = 1.0;
+                    for (const area in CSRankings.topLevelAreas) {
+                        if (currentWeights[area] === 0) continue;
+                        const areaDept = area + dept;
+                        const total = (areaDept in this.areaDeptAdjustedCount) ? this.areaDeptAdjustedCount[areaDept] : 0;
+                        const contrib = (name in this.facultyAreaAdjustedCount && area in this.facultyAreaAdjustedCount[name]) ? this.facultyAreaAdjustedCount[name][area] : 0;
+                        const remainder = Math.max(0, total - contrib);
+                        prod *= (remainder + 1.0);
+                    }
+                    const newstat = Math.pow(prod, 1 / numAreas);
+                    const marginal = Math.max(0, this.stats[dept] - newstat); // avoid negative from floating error
+                    this.facultyMarginal[name] = marginal;
+                }
+            }
+        }
+
         const univtext = this.buildDropDown(deptNames,
             facultycount,
-            facultyAdjustedCount);
+            facultyAdjustedCount,
+            this.facultyMarginal);
 
         /* Start building up the string to output. */
         const s = this.buildOutputString(numAreas,
-            this.countryAbbrv,
-            deptCounts,
-            univtext,
-            CSRankings.minToRank);
+    this.countryAbbrv,
+    deptCounts,
+    deptNames,           // ADD this parameter
+    univtext,
+    CSRankings.minToRank,
+    this.facultyMarginal);
 
         let stop = performance.now();
         console.log(`Before render: rank took ${(stop - start)} milliseconds.`);
@@ -1614,6 +1816,31 @@ class CSRankings {
             widget!.innerHTML = this.DownTriangle;
         }
     }
+
+    /* Sort faculty within a department by different metrics */
+    public sortFaculty(dept: string, sortBy: 'marginal' | 'adjusted' | 'pubs' | 'marginalpct' | 'adjpct'): void {
+    // Store the preference
+    this.facultySortPreference[dept] = sortBy;
+    
+    // Re-rank to rebuild the faculty tables with new sort
+    // Pass false to prevent URL navigation during sort
+    this.rank(false);
+    
+    // Keep the faculty section expanded if it was already open
+    const facultyDiv = document.getElementById(dept + "-faculty");
+    if (facultyDiv && facultyDiv.style.display !== 'none') {
+        // It was open, make sure it stays open after re-rank
+        setTimeout(() => {
+            const e = document.getElementById(dept + "-faculty");
+            const widget = document.getElementById(dept + "-widget");
+            if (e && widget) {
+                e.style.display = 'block';
+                widget.innerHTML = this.DownTriangle;
+            }
+        }, 0);
+    }
+}
+
 
     public activateAll(value: boolean = true): boolean {
         this.setAllOn(value);

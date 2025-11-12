@@ -1,16 +1,18 @@
 {
-    "compilerOptions": {
-	"target": "es6",
-	"skipLibCheck": true,
-	"noImplicitAny": true,
-	"noImplicitReturns": true,
-	"forceConsistentCasingInFileNames": true,
-	"noImplicitThis": true,
-	"noUnusedParameters": true,
-	"noFallthroughCasesInSwitch": true,
-	"strictNullChecks": true,
-//	"pretty": true
-    },
-    "files": [ "csrankings.ts", "continents.ts" ],
-    "moduleResolution": "node"
+  "compilerOptions": {
+    "target": "es6",
+    "skipLibCheck": true,
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
+    "forceConsistentCasingInFileNames": true,
+    "noImplicitThis": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "strictNullChecks": true,
+
+    "lib": ["es6", "dom", "dom.iterable"],
+    "downlevelIteration": true
+  },
+  "files": ["csrankings.ts", "continents.ts"],
+  "moduleResolution": "node"
 }
