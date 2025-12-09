@@ -72,7 +72,8 @@ class CSRankings {
         this.acmfellowImage = "./png/acm.png";
         this.homepageImage = "./png/house-logo.png";
         this.allowRankingChange = false; /* Can we change the kind of rankings being used? */
-        this.areaMap = [{ area: "ai", title: "AI" },
+        this.areaMap = [
+            { area: "ai", title: "AI" },
             { area: "aaai", title: "AI" },
             { area: "ijcai", title: "AI" },
             { area: "vision", title: "Vision" },
@@ -176,12 +177,33 @@ class CSRankings {
             { area: "ec", title: "ECom" },
             { area: "wine", title: "ECom" },
             { area: "csed", title: "CSEd" },
-            { area: "sigcse", title: "CSEd" }
+            { area: "sigcse", title: "CSEd" },
         ];
         this.aiAreas = ["ai", "vision", "mlmining", "nlp", "inforet"];
-        this.systemsAreas = ["arch", "comm", "sec", "mod", "da", "bed", "hpc", "mobile", "metrics", "ops", "plan", "soft"];
+        this.systemsAreas = [
+            "arch",
+            "comm",
+            "sec",
+            "mod",
+            "da",
+            "bed",
+            "hpc",
+            "mobile",
+            "metrics",
+            "ops",
+            "plan",
+            "soft",
+        ];
         this.theoryAreas = ["act", "crypt", "log"];
-        this.interdisciplinaryAreas = ["bio", "graph", "csed", "ecom", "chi", "robotics", "visualization"];
+        this.interdisciplinaryAreas = [
+            "bio",
+            "graph",
+            "csed",
+            "ecom",
+            "chi",
+            "robotics",
+            "visualization",
+        ];
         this.areaNames = [];
         this.fields = [];
         this.aiFields = [];
@@ -226,6 +248,12 @@ class CSRankings {
         /* Per-faculty marginal contribution to their department score. */
         this.facultyMarginal = {};
         this.areaStringMap = {}; // name -> areaString (memoized)
+        /* Store department names for analysis */
+        this.currentDeptNames = {};
+        /* Per-faculty marginal contribution by area (for disambiguation) */
+        this.facultyMarginalByArea = {};
+        /* Method for calculating marginal delta: 'weighted', 'primary', or 'original' */
+        this.marginalCalculationMethod = "weighted";
         this.usePieChart = false;
         /* Colors. */
         this.RightTriangle = "&#9658;"; // right-facing triangle symbol (collapsed view)
@@ -241,10 +269,10 @@ class CSRankings {
         CSRankings.theInstance = this;
         this.navigoRouter = new Navigo(null, true);
         /* Build dictionaries:
-       areaDict: areas -> names used in pie charts
-           areaPosition: areas -> position in area array
-       subareas: subareas -> areas (e.g., "Vision" -> "ai")
-        */
+           areaDict: areas -> names used in pie charts
+               areaPosition: areas -> position in area array
+           subareas: subareas -> areas (e.g., "Vision" -> "ai")
+            */
         for (let position = 0; position < this.areaMap.length; position++) {
             const { area, title } = this.areaMap[position];
             CSRankings.areas[position] = area;
@@ -260,10 +288,12 @@ class CSRankings {
             this.areaPosition[area] = position;
         }
         const subareaList = [
-            ...this.aiAreas.map(key => ({ [this.areaDict[key]]: "ai" })),
-            ...this.systemsAreas.map(key => ({ [this.areaDict[key]]: "systems" })),
-            ...this.theoryAreas.map(key => ({ [this.areaDict[key]]: "theory" })),
-            ...this.interdisciplinaryAreas.map(key => ({ [this.areaDict[key]]: "interdisciplinary" })),
+            ...this.aiAreas.map((key) => ({ [this.areaDict[key]]: "ai" })),
+            ...this.systemsAreas.map((key) => ({ [this.areaDict[key]]: "systems" })),
+            ...this.theoryAreas.map((key) => ({ [this.areaDict[key]]: "theory" })),
+            ...this.interdisciplinaryAreas.map((key) => ({
+                [this.areaDict[key]]: "interdisciplinary",
+            })),
         ];
         for (const item of subareaList) {
             for (const key in item) {
@@ -303,10 +333,12 @@ class CSRankings {
             this.displayProgress(3);
             yield this.loadAuthors();
             this.setAllOn();
-            this.navigoRouter.on({
-                '/index': this.navigation,
-                '/fromyear/:fromyear/toyear/:toyear/index': this.navigation
-            }).resolve();
+            this.navigoRouter
+                .on({
+                "/index": this.navigation,
+                "/fromyear/:fromyear/toyear/:toyear/index": this.navigation,
+            })
+                .resolve();
             this.displayProgress(4);
             this.countAuthorAreas();
             yield this.loadCountryInfo(this.countryInfo, this.countryAbbrv);
@@ -321,16 +353,18 @@ class CSRankings {
             // Check to see if survey has already been displayed.
             let displaySurvey = false;
             // Keep the cookie for backwards compatibility (for now).
-            let shownAlready = document.cookie.split('; ').find(row => row.startsWith('surveyDisplayed')) ||
-                localStorage.getItem('surveyDisplayed');
+            let shownAlready = document.cookie
+                .split("; ")
+                .find((row) => row.startsWith("surveyDisplayed")) ||
+                localStorage.getItem("surveyDisplayed");
             // DISABLE SURVEY (remove the next line to re-enable)
-            shownAlready = 'disabled';
+            shownAlready = "disabled";
             if (!shownAlready) {
                 // Not shown yet.
                 const randomValue = Math.floor(Math.random() * surveyFrequency);
-                displaySurvey = (randomValue == 0);
+                displaySurvey = randomValue == 0;
                 if (displaySurvey) {
-                    localStorage.setItem('surveyDisplayed', 'true');
+                    localStorage.setItem("surveyDisplayed", "true");
                     // Now reveal the survey.
                     document.getElementById("overlay-survey").style.display = "block";
                 }
@@ -339,12 +373,13 @@ class CSRankings {
             // In the future, tie to amount of use of the site, a la Wikipedia.
             const sponsorshipFrequency = 5; // One out of this many users gets the sponsor page (on average).
             // Check to see if the sponsorship page has already been displayed.
-            if (!localStorage.getItem('sponsorshipDisplayed')) {
+            if (!localStorage.getItem("sponsorshipDisplayed")) {
                 // Not shown yet.
                 const randomValue = Math.floor(Math.random() * sponsorshipFrequency);
-                const displaySponsor = (randomValue == 0);
-                if (!displaySurvey && displaySponsor) { // Only show if we have not shown the survey page as well.
-                    localStorage.setItem('sponsorshipDisplayed', 'true');
+                const displaySponsor = randomValue == 0;
+                if (!displaySurvey && displaySponsor) {
+                    // Only show if we have not shown the survey page as well.
+                    localStorage.setItem("sponsorshipDisplayed", "true");
                     // Now reveal the sponsorship page.
                     document.getElementById("overlay-sponsor").style.display = "block";
                 }
@@ -353,13 +388,13 @@ class CSRankings {
     }
     getMarginalColor(marginal, maxMarginal) {
         if (maxMarginal === 0)
-            return '#95a5a6';
+            return "#95a5a6";
         const ratio = marginal / maxMarginal;
         if (ratio > 0.7)
-            return '#2ecc71'; // green for high impact
+            return "#2ecc71"; // green for high impact
         if (ratio > 0.4)
-            return '#f39c12'; // orange for medium
-        return '#95a5a6'; // gray for low
+            return "#f39c12"; // orange for medium
+        return "#95a5a6"; // gray for low
     }
     translateNameToDBLP(name) {
         // Ex: "Emery D. Berger" -> "http://dblp.uni-trier.de/pers/hd/b/Berger:Emery_D="
@@ -369,7 +404,10 @@ class CSRankings {
         name = name.replace(/ III/g, "_III");
         name = name.replace(/'|\-|\./g, "=");
         // Now replace diacritics.
-        name = he.encode(name, { 'useNamedReferences': true, 'allowUnsafeSymbols': true });
+        name = he.encode(name, {
+            useNamedReferences: true,
+            allowUnsafeSymbols: true,
+        });
         name = name.replace(/&/g, "=");
         name = name.replace(/;/g, "=");
         let splitName = name.split(" ");
@@ -393,9 +431,9 @@ class CSRankings {
     }
     /* Create the prologue that we preface each generated HTML page with (the results). */
     makePrologue() {
-        const s = '<div class="table-responsive" style="overflow:auto; height:700px;">'
-            + '<table class="table table-fit table-sm table-striped"'
-            + 'id="ranking" valign="top">';
+        const s = '<div class="table-responsive" style="overflow:auto; height:700px;">' +
+            '<table class="table table-fit table-sm table-striped"' +
+            'id="ranking" valign="top">';
         return s;
     }
     static sum(n) {
@@ -412,7 +450,7 @@ class CSRankings {
         const avg = CSRankings.average(n);
         const squareDiffs = n.map(function (value) {
             const diff = value - avg;
-            return (diff * diff);
+            return diff * diff;
         });
         const sigma = Math.sqrt(CSRankings.sum(squareDiffs) / (n.length - 1));
         return sigma;
@@ -439,7 +477,8 @@ class CSRankings {
         let datadict = {};
         const keys = CSRankings.topTierAreas;
         let maxValue = 0;
-        for (let key in keys) { // i = 0; i < keys.length; i++) {
+        for (let key in keys) {
+            // i = 0; i < keys.length; i++) {
             //	    let key = keys[i];
             //	    if (key in CSRankings.nextTier) {
             //		continue;
@@ -453,7 +492,7 @@ class CSRankings {
                     datadict[key] = 0;
                 }
                 datadict[key] += value;
-                maxValue = (datadict[key] > maxValue) ? datadict[key] : maxValue;
+                maxValue = datadict[key] > maxValue ? datadict[key] : maxValue;
             }
         }
         // Now compute the standard deviation.
@@ -471,23 +510,29 @@ class CSRankings {
         // publication threshold.
         let maxes = [];
         for (const key in datadict) {
-            if ((datadict[key] >= maxValue - stddevs) &&
-                ((1.0 * datadict[key]) / sum >= pubThreshold) &&
-                (datadict[key] > minPubThreshold)) {
+            if (datadict[key] >= maxValue - stddevs &&
+                (1.0 * datadict[key]) / sum >= pubThreshold &&
+                datadict[key] > minPubThreshold) {
                 maxes.push(key);
             }
         }
         // Finally, pick at most the top N.
-        const areaList = maxes.sort((x, y) => { return datadict[y] - datadict[x]; }).slice(0, topN);
+        const areaList = maxes
+            .sort((x, y) => {
+            return datadict[y] - datadict[x];
+        })
+            .slice(0, topN);
         // Cache the result.
-        this.areaStringMap[name] = areaList.map(n => `<span class="${this.subareas[n]}-area">${n}</span>`).join(",");
+        this.areaStringMap[name] = areaList
+            .map((n) => `<span class="${this.subareas[n]}-area">${n}</span>`)
+            .join(",");
         // Return it.
         return this.areaStringMap[name];
     }
     removeDisambiguationSuffix(str) {
         // Matches a space followed by a four-digit number at the end of the string
         const regex = /\s\d{4}$/;
-        return str.replace(regex, '');
+        return str.replace(regex, "");
     }
     /* from http://hubrik.com/2015/11/16/sort-by-last-name-with-javascript/ */
     compareNames(a, b) {
@@ -524,13 +569,30 @@ class CSRankings {
         const uname = unescape(name);
         // Areas with their category info for color map (from https://colorbrewer2.org/#type=qualitative&scheme=Set1&n=4).
         const areas = [
-            ...this.aiAreas.map(key => ({ key: key, label: this.areaDict[key], color: "#377eb8" })),
-            ...this.systemsAreas.map(key => ({ key: key, label: this.areaDict[key], color: "#ff7f00" })),
-            ...this.theoryAreas.map(key => ({ key: key, label: this.areaDict[key], color: "#4daf4a" })),
-            ...this.interdisciplinaryAreas.map(key => ({ key: key, label: this.areaDict[key], color: "#984ea3" }))
+            ...this.aiAreas.map((key) => ({
+                key: key,
+                label: this.areaDict[key],
+                color: "#377eb8",
+            })),
+            ...this.systemsAreas.map((key) => ({
+                key: key,
+                label: this.areaDict[key],
+                color: "#ff7f00",
+            })),
+            ...this.theoryAreas.map((key) => ({
+                key: key,
+                label: this.areaDict[key],
+                color: "#4daf4a",
+            })),
+            ...this.interdisciplinaryAreas.map((key) => ({
+                key: key,
+                label: this.areaDict[key],
+                color: "#984ea3",
+            })),
         ];
-        areas.forEach(area => datadict[area.key] = 0);
-        for (let key in keys) { // i = 0; i < keys.length; i++) {
+        areas.forEach((area) => (datadict[area.key] = 0));
+        for (let key in keys) {
+            // i = 0; i < keys.length; i++) {
             //	    let key = keys[i];
             if (!(uname in this.authorAreas)) {
                 // Defensive programming.
@@ -544,15 +606,15 @@ class CSRankings {
             const value = Math.round(this.authorAreas[uname][key] * 10) / 10;
             // Use adjusted count if this is for a department.
             /*
-              DISABLED so department charts are invariant.
-              
-              if (uname in this.stats) {
-              value = this.areaDeptAdjustedCount[key+uname] + 1;
-              if (value == 1) {
-              value = 0;
-              }
-              }
-            */
+                    DISABLED so department charts are invariant.
+                    
+                    if (uname in this.stats) {
+                    value = this.areaDeptAdjustedCount[key+uname] + 1;
+                    if (value == 1) {
+                    value = 0;
+                    }
+                    }
+                  */
             if (value > 0) {
                 if (key in CSRankings.parentMap) {
                     key = CSRankings.parentMap[key];
@@ -561,7 +623,7 @@ class CSRankings {
             }
         }
         let valueSum = 0;
-        areas.forEach(area => {
+        areas.forEach((area) => {
             valueSum += datadict[area.key];
         });
         areas.forEach((area, index) => {
@@ -569,16 +631,18 @@ class CSRankings {
                 index: index,
                 area: this.areaDict[area.key],
                 value: Math.round(datadict[area.key] * 10) / 10,
-                ratio: datadict[area.key] / valueSum
+                ratio: datadict[area.key] / valueSum,
             };
             data.push(newSlice);
             area.label = this.areaDict[area.key];
         });
-        const colors = areas.sort((a, b) => a.label > b.label ? 1 : (a.label < b.label ? -1 : 0)).map(area => area.color);
+        const colors = areas
+            .sort((a, b) => (a.label > b.label ? 1 : a.label < b.label ? -1 : 0))
+            .map((area) => area.color);
         const vegaLiteBarChartSpec = {
             $schema: "https://vega.github.io/schema/vega-lite/v5.json",
             data: {
-                values: data
+                values: data,
             },
             mark: "bar",
             encoding: {
@@ -586,92 +650,110 @@ class CSRankings {
                     field: "area",
                     type: "nominal",
                     sort: null,
-                    axis: { title: null }
+                    axis: { title: null },
                 },
                 y: {
                     field: "value",
                     type: "quantitative",
-                    axis: { title: null }
+                    axis: { title: null },
                 },
                 tooltip: [
-                    { "field": "area", "type": "nominal", "title": "Area" },
-                    { "field": "value", "type": "quantitative", "title": "Count" }
+                    { field: "area", type: "nominal", title: "Area" },
+                    { field: "value", type: "quantitative", title: "Count" },
                 ],
                 color: {
                     field: "area",
                     type: "nominal",
-                    scale: { "range": colors },
-                    legend: null
-                }
+                    scale: { range: colors },
+                    legend: null,
+                },
             },
             width: 420,
             height: 80,
-            padding: { left: 25, top: 3 }
+            padding: { left: 25, top: 3 },
         };
         const vegaLitePieChartSpec = {
             $schema: "https://vega.github.io/schema/vega-lite/v5.json",
             data: {
-                values: data
+                values: data,
             },
             encoding: {
                 theta: {
                     field: "value",
                     type: "quantitative",
-                    stack: true
+                    stack: true,
                 },
                 color: {
                     field: "area",
                     type: "nominal",
-                    scale: { "range": colors },
-                    legend: null
+                    scale: { range: colors },
+                    legend: null,
                 },
                 order: { field: "index" },
                 tooltip: [
                     { field: "area", type: "nominal", title: "Area" },
                     { field: "value", type: "quantitative", title: "Count" },
-                    { field: "ratio", type: "quantitative", title: "Ratio", format: ".1%" }
-                ]
+                    {
+                        field: "ratio",
+                        type: "quantitative",
+                        title: "Ratio",
+                        format: ".1%",
+                    },
+                ],
             },
             layer: [
                 {
-                    mark: { type: "arc", outerRadius: 90, stroke: "#fdfdfd", strokeWidth: 1 }
+                    mark: {
+                        type: "arc",
+                        outerRadius: 90,
+                        stroke: "#fdfdfd",
+                        strokeWidth: 1,
+                    },
                 },
                 {
                     mark: { type: "text", radius: 108, dy: -3 },
                     encoding: {
                         text: { field: "area", type: "nominal" },
                         color: {
-                            condition: { test: "datum.ratio < 0.03", value: "rgba(255, 255, 255, 0)" },
+                            condition: {
+                                test: "datum.ratio < 0.03",
+                                value: "rgba(255, 255, 255, 0)",
+                            },
                             field: "area",
                             type: "nominal",
-                            scale: { "range": colors }
-                        }
-                    }
+                            scale: { range: colors },
+                        },
+                    },
                 },
                 {
                     mark: { type: "text", radius: 108, fontSize: 9, dy: 7 },
                     encoding: {
                         text: { field: "value", type: "quantitative" },
                         color: {
-                            condition: { test: "datum.ratio < 0.03", value: "rgba(255, 255, 255, 0)" },
+                            condition: {
+                                test: "datum.ratio < 0.03",
+                                value: "rgba(255, 255, 255, 0)",
+                            },
                             field: "area",
                             type: "nominal",
-                            scale: { "range": colors }
-                        }
-                    }
-                }
+                            scale: { range: colors },
+                        },
+                    },
+                },
             ],
             width: 400,
             height: 250,
-            padding: { left: 25, top: 3 }
+            padding: { left: 25, top: 3 },
         };
         vegaEmbed(`div[id="${name}-chart"]`, isPieChart ? vegaLitePieChartSpec : vegaLiteBarChartSpec, { actions: false });
     }
     displayProgress(step) {
-        const msgs = ["Initializing.",
+        const msgs = [
+            "Initializing.",
             "Loading author information.",
             "Loading publication data.",
-            "Computing ranking."];
+            "Computing ranking.",
+        ];
         const s = `<strong>${msgs[step - 1]}</strong><br />`;
         const progress = document.querySelector("#progress");
         if (progress) {
@@ -686,7 +768,7 @@ class CSRankings {
                     download: true,
                     complete: (results) => {
                         resolve(results.data);
-                    }
+                    },
                 });
             });
             const d = data;
@@ -703,7 +785,7 @@ class CSRankings {
                     download: true,
                     complete: (results) => {
                         resolve(results.data);
-                    }
+                    },
                 });
             });
             const d = data;
@@ -720,7 +802,7 @@ class CSRankings {
                     download: true,
                     complete: (results) => {
                         resolve(results.data);
-                    }
+                    },
                 });
             });
             const ci = data;
@@ -738,7 +820,7 @@ class CSRankings {
                     download: true,
                     complete: (results) => {
                         resolve(results.data);
-                    }
+                    },
                 });
             });
             const ci = data;
@@ -755,13 +837,13 @@ class CSRankings {
                     header: true,
                     complete: (results) => {
                         resolve(results.data);
-                    }
+                    },
                 });
             });
             const ai = data;
             for (let counter = 0; counter < ai.length; counter++) {
                 const record = ai[counter];
-                let name = record['name'].trim();
+                let name = record["name"].trim();
                 const result = name.match(CSRankings.nameMatcher);
                 if (result) {
                     name = result[1].trim();
@@ -769,8 +851,8 @@ class CSRankings {
                 }
                 if (name !== "") {
                     this.dblpAuthors[name] = this.translateNameToDBLP(name);
-                    this.homepages[name] = record['homepage'];
-                    this.scholarInfo[name] = record['scholarid'];
+                    this.homepages[name] = record["homepage"];
+                    this.scholarInfo[name] = record["scholarid"];
                 }
             }
         });
@@ -783,7 +865,7 @@ class CSRankings {
                     header: true,
                     complete: (results) => {
                         resolve(results.data);
-                    }
+                    },
                 });
             });
             this.authors = data;
@@ -797,7 +879,8 @@ class CSRankings {
                 }
                 break;
             case "europe":
-                if (!(dept in this.countryInfo)) { // USA
+                if (!(dept in this.countryInfo)) {
+                    // USA
                     return false;
                 }
                 if (this.countryInfo[dept] != "europe") {
@@ -805,12 +888,13 @@ class CSRankings {
                 }
                 break;
             case "northamerica":
-                if ((dept in this.countryInfo) && (this.countryInfo[dept] != "canada")) {
+                if (dept in this.countryInfo && this.countryInfo[dept] != "canada") {
                     return false;
                 }
                 break;
             case "australasia":
-                if (!(dept in this.countryInfo)) { // USA
+                if (!(dept in this.countryInfo)) {
+                    // USA
                     return false;
                 }
                 if (this.countryInfo[dept] != "australasia") {
@@ -818,7 +902,8 @@ class CSRankings {
                 }
                 break;
             case "southamerica":
-                if (!(dept in this.countryInfo)) { // USA
+                if (!(dept in this.countryInfo)) {
+                    // USA
                     return false;
                 }
                 if (this.countryInfo[dept] != "southamerica") {
@@ -826,7 +911,8 @@ class CSRankings {
                 }
                 break;
             case "asia":
-                if (!(dept in this.countryInfo)) { // USA
+                if (!(dept in this.countryInfo)) {
+                    // USA
                     return false;
                 }
                 if (this.countryInfo[dept] != "asia") {
@@ -834,7 +920,8 @@ class CSRankings {
                 }
                 break;
             case "africa":
-                if (!(dept in this.countryInfo)) { // USA
+                if (!(dept in this.countryInfo)) {
+                    // USA
                     return false;
                 }
                 if (this.countryInfo[dept] != "africa") {
@@ -855,18 +942,18 @@ class CSRankings {
         for (let i = 0; i < fields.length; i++) {
             const item = this.fields[fields[i]];
             const str = `input[name=${item}]`;
-            $(str).prop('checked', value);
+            $(str).prop("checked", value);
             if (item in CSRankings.childMap) {
                 // It's a parent.
-                $(str).prop('disabled', false);
+                $(str).prop("disabled", false);
                 // Activate / deactivate all children as appropriate.
                 CSRankings.childMap[item].forEach((k) => {
                     const str = `input[name=${k}]`;
                     if (k in CSRankings.nextTier) {
-                        $(str).prop('checked', false);
+                        $(str).prop("checked", false);
                     }
                     else {
-                        $(str).prop('checked', value);
+                        $(str).prop("checked", value);
                     }
                 });
             }
@@ -881,13 +968,13 @@ class CSRankings {
                 return univagg[b] - univagg[a];
             }
             /*
-              if (univagg[a] > univagg[b]) {
-              return -1;
-              }
-              if (univagg[b] > univagg[a]) {
-              return 1;
-              }
-            */
+                    if (univagg[a] > univagg[b]) {
+                    return -1;
+                    }
+                    if (univagg[b] > univagg[a]) {
+                    return 1;
+                    }
+                  */
             if (a < b) {
                 return -1;
             }
@@ -908,18 +995,18 @@ class CSRankings {
                 continue;
             }
             const { year } = this.authors[r];
-            if ((year < startyear) || (year > endyear)) {
+            if (year < startyear || year > endyear) {
                 continue;
             }
             const { name, dept, count } = this.authors[r];
             /*
-              DISABLING weight selection so all pie charts look the
-              same regardless of which areas are currently selected:
-              
-              if (weights[theArea] === 0) {
-              continue;
-              }
-            */
+                    DISABLING weight selection so all pie charts look the
+                    same regardless of which areas are currently selected:
+                    
+                    if (weights[theArea] === 0) {
+                    continue;
+                    }
+                  */
             const theCount = parseFloat(count);
             if (!(name in this.authorAreas)) {
                 this.authorAreas[name] = {};
@@ -960,10 +1047,10 @@ class CSRankings {
                 continue;
             }
             const year = auth.year;
-            if ((year < startyear) || (year > endyear)) {
+            if (year < startyear || year > endyear) {
                 continue;
             }
-            if (typeof dept === 'undefined') {
+            if (typeof dept === "undefined") {
                 continue;
             }
             const name = auth.name;
@@ -1021,7 +1108,7 @@ class CSRankings {
                 }
                 if (weights[area] != 0) {
                     // Adjusted (smoothed) geometric mean.
-                    this.stats[dept] *= (this.areaDeptAdjustedCount[areaDept] + 1.0);
+                    this.stats[dept] *= this.areaDeptAdjustedCount[areaDept] + 1.0;
                 }
             }
             // finally compute geometric mean.
@@ -1034,7 +1121,9 @@ class CSRankings {
         let numAreas = 0;
         for (let ind = 0; ind < CSRankings.areas.length; ind++) {
             const area = CSRankings.areas[ind];
-            weights[area] = $(`input[name=${this.fields[ind]}]`).prop('checked') ? 1 : 0;
+            weights[area] = $(`input[name=${this.fields[ind]}]`).prop("checked")
+                ? 1
+                : 0;
             if (weights[area] === 1) {
                 if (area in CSRankings.parentMap) {
                     // Don't count children.
@@ -1053,39 +1142,39 @@ class CSRankings {
             if (!deptNames.hasOwnProperty(dept)) {
                 continue;
             }
-            const currentSort = this.facultySortPreference[dept] || 'adjusted';
+            const currentSort = this.facultySortPreference[dept] || "adjusted";
             let p = '<div class="table"><table class="table table-sm table-striped">' +
-                '<thead>' +
-                '<tr>' +
-                '<th></th>' +
+                "<thead>" +
+                "<tr>" +
+                "<th></th>" +
                 '<th><small><em><abbr title="Click on an author\'s name to go to their home page.">Faculty</abbr></em></small></th>' +
                 '<th align="right">' +
                 `<small><em><a href="#" onclick="csr.sortFaculty('${dept}', 'pubs'); return false;" ` +
-                `style="color: ${currentSort === 'pubs' ? '#0066cc' : '#4a5568'}; font-weight: ${currentSort === 'pubs' ? 'bold' : 'normal'}; text-decoration: underline; cursor: pointer;" ` +
-                `title="Click to sort by publication count">#&nbsp;Pubs${currentSort === 'pubs' ? ' ▼' : ''}</a></em></small>` +
-                '</th>' +
+                `style="color: ${currentSort === "pubs" ? "#0066cc" : "#4a5568"}; font-weight: ${currentSort === "pubs" ? "bold" : "normal"}; text-decoration: underline; cursor: pointer;" ` +
+                `title="Click to sort by publication count">#&nbsp;Pubs${currentSort === "pubs" ? " ▼" : ""}</a></em></small>` +
+                "</th>" +
                 '<th align="right">' +
                 `<small><em><a href="#" onclick="csr.sortFaculty('${dept}', 'adjusted'); return false;" ` +
-                `style="color: ${currentSort === 'adjusted' ? '#0066cc' : '#4a5568'}; font-weight: ${currentSort === 'adjusted' ? 'bold' : 'normal'}; text-decoration: underline; cursor: pointer;" ` +
-                `title="Click to sort by adjusted count">Adj.&nbsp;#${currentSort === 'adjusted' ? ' ▼' : ''}</a></em></small>` +
-                '</th>' +
+                `style="color: ${currentSort === "adjusted" ? "#0066cc" : "#4a5568"}; font-weight: ${currentSort === "adjusted" ? "bold" : "normal"}; text-decoration: underline; cursor: pointer;" ` +
+                `title="Click to sort by adjusted count">Adj.&nbsp;#${currentSort === "adjusted" ? " ▼" : ""}</a></em></small>` +
+                "</th>" +
                 '<th align="right">' +
                 `<small><em><a href="#" onclick="csr.sortFaculty('${dept}', 'marginal'); return false;" ` +
-                `style="color: ${currentSort === 'marginal' ? '#0066cc' : '#4a5568'}; font-weight: ${currentSort === 'marginal' ? 'bold' : 'normal'}; text-decoration: underline; cursor: pointer;" ` +
-                `title="Click to sort by marginal contribution">Marginal&nbsp;Δ${currentSort === 'marginal' ? ' ▼' : ''}</a></em></small>` +
-                '</th>' +
+                `style="color: ${currentSort === "marginal" ? "#0066cc" : "#4a5568"}; font-weight: ${currentSort === "marginal" ? "bold" : "normal"}; text-decoration: underline; cursor: pointer;" ` +
+                `title="Click to sort by marginal contribution">Marginal&nbsp;Δ${currentSort === "marginal" ? " ▼" : ""}</a></em></small>` +
+                "</th>" +
                 '<th align="right">' +
                 `<small><em><a href="#" onclick="csr.sortFaculty('${dept}', 'marginalpct'); return false;" ` +
-                `style="color: ${currentSort === 'marginalpct' ? '#0066cc' : '#4a5568'}; font-weight: ${currentSort === 'marginalpct' ? 'bold' : 'normal'}; text-decoration: underline; cursor: pointer;" ` +
-                `title="Click to sort by marginal percentage">Marginal&nbsp;%${currentSort === 'marginalpct' ? ' ▼' : ''}</a></em></small>` +
-                '</th>' +
+                `style="color: ${currentSort === "marginalpct" ? "#0066cc" : "#4a5568"}; font-weight: ${currentSort === "marginalpct" ? "bold" : "normal"}; text-decoration: underline; cursor: pointer;" ` +
+                `title="Click to sort by marginal percentage">Marginal&nbsp;%${currentSort === "marginalpct" ? " ▼" : ""}</a></em></small>` +
+                "</th>" +
                 '<th align="right">' +
                 `<small><em><a href="#" onclick="csr.sortFaculty('${dept}', 'adjpct'); return false;" ` +
-                `style="color: ${currentSort === 'adjpct' ? '#0066cc' : '#4a5568'}; font-weight: ${currentSort === 'adjpct' ? 'bold' : 'normal'}; text-decoration: underline; cursor: pointer;" ` +
-                `title="Click to sort by adjusted percentage">Adj&nbsp;%${currentSort === 'adjpct' ? ' ▼' : ''}</a></em></small>` +
-                '</th>' +
-                '</tr>' +
-                '</thead><tbody>';
+                `style="color: ${currentSort === "adjpct" ? "#0066cc" : "#4a5568"}; font-weight: ${currentSort === "adjpct" ? "bold" : "normal"}; text-decoration: underline; cursor: pointer;" ` +
+                `title="Click to sort by adjusted percentage">Adj&nbsp;%${currentSort === "adjpct" ? " ▼" : ""}</a></em></small>` +
+                "</th>" +
+                "</tr>" +
+                "</thead><tbody>";
             /* Build a dict of just faculty from this department for sorting purposes. */
             let fc = {};
             for (const name of deptNames[dept]) {
@@ -1093,12 +1182,13 @@ class CSRankings {
             }
             let keys = Object.keys(fc);
             // Calculate max marginal for color scaling
-            const marginals = keys.map(name => facultyMarginal && (name in facultyMarginal) ? facultyMarginal[name] : 0);
+            const marginals = keys.map((name) => facultyMarginal && name in facultyMarginal ? facultyMarginal[name] : 0);
             const maxMarginalInDept = Math.max(0, ...marginals); // guard empty
             //const maxMarginalInDept = Math.max(...marginals);
-            const sortBy = this.facultySortPreference[dept] || 'adjusted';
+            const sortBy = this.facultySortPreference[dept] || "adjusted";
             const deptAdjTotal = deptNames[dept].reduce((sum, name) => sum + (facultyAdjustedCount[name] || 0), 0);
-            const sortedEntries = keys.map((name) => {
+            const sortedEntries = keys
+                .map((name) => {
                 var _a, _b;
                 const myAdj = facultyAdjustedCount[name] || 0;
                 const myMarginal = (_a = facultyMarginal === null || facultyMarginal === void 0 ? void 0 : facultyMarginal[name]) !== null && _a !== void 0 ? _a : 0;
@@ -1109,25 +1199,26 @@ class CSRankings {
                     adj: Math.round(10.0 * myAdj) / 10.0,
                     marginal: myMarginal,
                     marginalpct: deptScore > 0 ? (myMarginal / deptScore) * 100 : 0,
-                    adjpct: deptAdjTotal > 0 ? (myAdj / deptAdjTotal) * 100 : 0
+                    adjpct: deptAdjTotal > 0 ? (myAdj / deptAdjTotal) * 100 : 0,
                 };
-            }).sort((a, b) => {
+            })
+                .sort((a, b) => {
                 let primaryDiff = 0;
                 // Sort by the chosen metric (DESCENDING order)
                 switch (sortBy) {
-                    case 'marginal':
+                    case "marginal":
                         primaryDiff = b.marginal - a.marginal;
                         break;
-                    case 'adjusted':
+                    case "adjusted":
                         primaryDiff = b.adj - a.adj;
                         break;
-                    case 'pubs':
+                    case "pubs":
                         primaryDiff = b.pubs - a.pubs;
                         break;
-                    case 'marginalpct':
+                    case "marginalpct":
                         primaryDiff = b.marginalpct - a.marginalpct;
                         break;
-                    case 'adjpct':
+                    case "adjpct":
                         primaryDiff = b.adjpct - a.adjpct;
                         break;
                 }
@@ -1137,30 +1228,31 @@ class CSRankings {
                 // Tiebreaker: alphabetical by name
                 return this.compareNames(a.name, b.name);
             });
-            keys = sortedEntries.map(entry => entry.name);
+            keys = sortedEntries.map((entry) => entry.name);
             /*
-            keys.sort((a: string, b: string) => {
-            if (fc[b] === fc[a]) {
-                const fb = Math.round(10.0 * (facultyAdjustedCount[b] || 0)) / 10.0;
-                const fa = Math.round(10.0 * (facultyAdjustedCount[a] || 0)) / 10.0;
-                if (fb === fa) {
-                const mb = facultyMarginal?.[b] ?? 0;
-                const ma = facultyMarginal?.[a] ?? 0;
-                if (mb !== ma) return mb - ma;      // higher marginal first
-                return this.compareNames(a, b);
-                }
-                return fb - fa;
-            }
-            return fc[b] - fc[a];
-            });
-            */
+                  keys.sort((a: string, b: string) => {
+                  if (fc[b] === fc[a]) {
+                      const fb = Math.round(10.0 * (facultyAdjustedCount[b] || 0)) / 10.0;
+                      const fa = Math.round(10.0 * (facultyAdjustedCount[a] || 0)) / 10.0;
+                      if (fb === fa) {
+                      const mb = facultyMarginal?.[b] ?? 0;
+                      const ma = facultyMarginal?.[a] ?? 0;
+                      if (mb !== ma) return mb - ma;      // higher marginal first
+                      return this.compareNames(a, b);
+                      }
+                      return fb - fa;
+                  }
+                  return fc[b] - fc[a];
+                  });
+                  */
             for (const name of keys) {
                 const homePage = encodeURI(this.homepages[name]);
                 const dblpName = this.dblpAuthors[name]; // this.translateNameToDBLP(name);
-                p += "<tr><td>&nbsp;&nbsp;&nbsp;&nbsp;</td><td><small>"
-                    + `<a title="Click for author\'s home page." target="_blank" href="${homePage}" `
-                    + `onclick="trackOutboundLink('${homePage}', true); return false;"`
-                    + `>${name}</a>&nbsp;`;
+                p +=
+                    "<tr><td>&nbsp;&nbsp;&nbsp;&nbsp;</td><td><small>" +
+                        `<a title="Click for author\'s home page." target="_blank" href="${homePage}" ` +
+                        `onclick="trackOutboundLink('${homePage}', true); return false;"` +
+                        `>${name}</a>&nbsp;`;
                 if (this.note.hasOwnProperty(name)) {
                     const url = CSRankings.noteMap[this.note[name]];
                     const href = `<a href="${url}">`;
@@ -1173,35 +1265,40 @@ class CSRankings {
                     p += `<span title="Turing Award"><img alt="Turing Award" src="${this.turingImage}"></span>&nbsp;`;
                 }
                 p += `<span class="areaname">${this.areaString(name).toLowerCase()}</span>&nbsp;`;
-                p += `<a title="Click for author\'s home page." target="_blank" href="${homePage}" `
-                    + `onclick="trackOutboundLink(\'${homePage}\', true); return false;"`
-                    + '>'
-                    + `<img alt=\"Home page\" src=\"${this.homepageImage}\"></a>&nbsp;`;
+                p +=
+                    `<a title="Click for author\'s home page." target="_blank" href="${homePage}" ` +
+                        `onclick="trackOutboundLink(\'${homePage}\', true); return false;"` +
+                        ">" +
+                        `<img alt=\"Home page\" src=\"${this.homepageImage}\"></a>&nbsp;`;
                 if (this.scholarInfo.hasOwnProperty(name)) {
                     if (this.scholarInfo[name] != "NOSCHOLARPAGE") {
                         const url = `https://scholar.google.com/citations?user=${this.scholarInfo[name]}&hl=en&oi=ao`;
-                        p += `<a title="Click for author\'s Google Scholar page." target="_blank" href="${url}" onclick="trackOutboundLink('${url}', true); return false;">`
-                            + '<img alt="Google Scholar" src="scholar-favicon.ico" height="10" width="10"></a>&nbsp;';
+                        p +=
+                            `<a title="Click for author\'s Google Scholar page." target="_blank" href="${url}" onclick="trackOutboundLink('${url}', true); return false;">` +
+                                '<img alt="Google Scholar" src="scholar-favicon.ico" height="10" width="10"></a>&nbsp;';
                     }
                 }
                 p += `<a title="Click for author\'s DBLP entry." target="_blank" href="${dblpName}" onclick="trackOutboundLink('${dblpName}', true); return false;">`;
-                p += '<img alt="DBLP" src="dblp.png">'
-                    + '</a>';
-                p += `<span onclick='csr.toggleChart("${escape(name)}"); ga("send", "event", "chart", "toggle", "toggle ${escape(name)} ${$("#charttype").find(":selected").val()} chart");' title="Click for author's publication profile." class="hovertip" id="${escape(name) + '-chartwidget'}">`;
-                p += this.ChartIcon + "</span>"
-                    + '</small>'
-                    + '</td><td align="right"><small>'
-                    + `<a title="Click for author's DBLP entry." target="_blank" href="${dblpName}" `
-                    + `onclick="trackOutboundLink('${dblpName}', true); return false;">${fc[name]}</a>`
-                    + "</small></td>"
-                    + '<td align="right"><small>'
-                    + (Math.round(10.0 * facultyAdjustedCount[name]) / 10.0).toFixed(1)
-                    + "</small></td>";
+                p += '<img alt="DBLP" src="dblp.png">' + "</a>";
+                p += `<span onclick='csr.toggleChart("${escape(name)}"); ga("send", "event", "chart", "toggle", "toggle ${escape(name)} ${$("#charttype")
+                    .find(":selected")
+                    .val()} chart");' title="Click for author's publication profile." class="hovertip" id="${escape(name) + "-chartwidget"}">`;
+                p +=
+                    this.ChartIcon +
+                        "</span>" +
+                        "</small>" +
+                        '</td><td align="right"><small>' +
+                        `<a title="Click for author's DBLP entry." target="_blank" href="${dblpName}" ` +
+                        `onclick="trackOutboundLink('${dblpName}', true); return false;">${fc[name]}</a>` +
+                        "</small></td>" +
+                        '<td align="right"><small>' +
+                        (Math.round(10.0 * facultyAdjustedCount[name]) / 10.0).toFixed(1) +
+                        "</small></td>";
                 const deptScore = this.stats[dept] || 1;
                 let absMarginal = "0.0";
                 let marginalPct = "0.0";
                 let marginalTooltip = "";
-                if (facultyMarginal && (name in facultyMarginal)) {
+                if (facultyMarginal && name in facultyMarginal) {
                     const m = facultyMarginal[name];
                     absMarginal = m.toFixed(2);
                     const pct = deptScore > 0 ? (m / deptScore) * 100 : 0;
@@ -1213,10 +1310,11 @@ class CSRankings {
                 const myAdj = facultyAdjustedCount[name] || 0;
                 const sharePct = deptAdjTotal > 0 ? (myAdj / deptAdjTotal) * 100 : 0;
                 p += `<td align="right"><small>${sharePct.toFixed(1)}%</small></td>`;
-                p += '</tr>' +
-                    `<tr><td colspan="7">` +
-                    `<div class="csr-chart" id="${escape(name)}-chart"></div>` +
-                    '</td></tr>';
+                p +=
+                    "</tr>" +
+                        `<tr><td colspan="7">` +
+                        `<div class="csr-chart" id="${escape(name)}-chart"></div>` +
+                        "</td></tr>";
             }
             p += "</tbody></table></div>";
             univtext[dept] = p;
@@ -1227,13 +1325,15 @@ class CSRankings {
         var _a;
         let s = this.makePrologue();
         /* Show the top N (with more if tied at the end) */
-        s = s + '<thead><tr><th align="left"><font color="#777">#</font></th><th align="left"><font color="#777">Institution</font>'
-            + '&nbsp;'.repeat(20)
-            + '</th><th align="right">'
-            + '<abbr title="Geometric mean count of papers published across all areas."><font color="#777">Count</font>'
-            + '</abbr></th><th align="right">&nbsp;<abbr title="Number of faculty who have published in these areas."><font color="#777">Faculty</font>'
-            + '</abbr></th><th align="right">&nbsp;<abbr title="Range of marginal contributions (min-max)"><font color="#777">Marginal Range</font>'
-            + '</abbr></th></tr></thead>';
+        s =
+            s +
+                '<thead><tr><th align="left"><font color="#777">#</font></th><th align="left"><font color="#777">Institution</font>' +
+                "&nbsp;".repeat(20) +
+                '</th><th align="right">' +
+                '<abbr title="Geometric mean count of papers published across all areas."><font color="#777">Count</font>' +
+                '</abbr></th><th align="right">&nbsp;<abbr title="Number of faculty who have published in these areas."><font color="#777">Faculty</font>' +
+                '</abbr></th><th align="right">&nbsp;<abbr title="Range of marginal contributions (min-max)"><font color="#777">Marginal Range</font>' +
+                "</abbr></th></tr></thead>";
         s = s + "<tbody>";
         /* As long as there is at least one thing selected, compute and display a ranking. */
         if (numAreas > 0) {
@@ -1249,11 +1349,11 @@ class CSRankings {
             // Now sort them,
             const keys2 = this.sortIndex(this.stats);
             /* Display rankings until we have shown `minToRank` items or
-               while there is a tie (those all get the same rank). */
+                     while there is a tie (those all get the same rank). */
             for (let ind = 0; ind < keys2.length; ind++) {
                 const dept = keys2[ind];
                 const v = this.stats[dept]; // Math.round(10.0 * this.stats[dept]) / 10.0;
-                if ((ind >= minToRank) && (v != oldv)) {
+                if (ind >= minToRank && v != oldv) {
                     break;
                 }
                 if (v === 0.0) {
@@ -1273,26 +1373,34 @@ class CSRankings {
                 // Print spaces to hold up to 4 digits of ranked schools.
                 s += "&nbsp;".repeat(4 - Math.ceil(Math.log10(rank)));
                 s += "</td>";
-                s += "<td>"
-                    + `<span class="hovertip" onclick="csr.toggleFaculty('${esc}');" id="${esc}-widget">`
-                    + this.RightTriangle
-                    + "</span>";
+                s +=
+                    "<td>" +
+                        `<span class="hovertip" onclick="csr.toggleFaculty('${esc}');" id="${esc}-widget">` +
+                        this.RightTriangle +
+                        "</span>";
                 let abbrv = "us";
                 if (dept in countryAbbrv) {
                     abbrv = countryAbbrv[dept];
                 }
                 const country = (_a = this.countryNames[abbrv.toUpperCase()]) !== null && _a !== void 0 ? _a : abbrv.toUpperCase();
-                s += "&nbsp;" + `<span onclick="csr.toggleFaculty('${esc}');">${dept}</span>`
-                    + `&nbsp;<img  title="${country}" src="/flags/${abbrv}.png">&nbsp;`
-                    + `<span class="hovertip" onclick='csr.toggleChart("${esc}"); ga("send", "event", "chart", "toggle-department", "toggle ${esc} ${$("#charttype").find(":selected").val()} chart");' id='${esc + "-chartwidget"}'>`
-                    + this.ChartIcon + "</span>";
+                s +=
+                    "&nbsp;" +
+                        `<span onclick="csr.toggleFaculty('${esc}');">${dept}</span>` +
+                        `&nbsp;<img  title="${country}" src="/flags/${abbrv}.png">&nbsp;` +
+                        `<span class="hovertip" onclick='csr.toggleChart("${esc}"); ga("send", "event", "chart", "toggle-department", "toggle ${esc} ${$("#charttype")
+                            .find(":selected")
+                            .val()} chart");' id='${esc + "-chartwidget"}'>` +
+                        this.ChartIcon +
+                        "</span>";
                 s += "</td>";
                 s += `<td align="right">${(Math.round(10.0 * v) / 10.0).toFixed(1)}</td>`;
                 s += `<td align="right">${deptCounts[dept]}`; /* number of faculty */
                 // Add marginal range column
                 const deptFacultyMarginals = deptNames[dept]
-                    .map(name => (facultyMarginal && (name in facultyMarginal)) ? facultyMarginal[name] : 0)
-                    .filter(m => m > 0);
+                    .map((name) => facultyMarginal && name in facultyMarginal
+                    ? facultyMarginal[name]
+                    : 0)
+                    .filter((m) => m > 0);
                 if (deptFacultyMarginals.length > 0) {
                     const maxM = Math.max(...deptFacultyMarginals);
                     const minM = Math.min(...deptFacultyMarginals);
@@ -1303,7 +1411,7 @@ class CSRankings {
                 }
                 s += "</td>";
                 s += "</tr>\n";
-                // style="width: 100%; height: 350px;" 
+                // style="width: 100%; height: 350px;"
                 s += `<tr><td colspan="5"><div class="csr-chart" id="${esc}-chart"></div></td></tr>`;
                 s += `<tr><td colspan="5"><div style="display:none;" id="${esc}-faculty">${univtext[dept]}</div></td></tr>`;
                 ties++;
@@ -1311,21 +1419,22 @@ class CSRankings {
             }
             s += "</tbody>" + "</table>" + "<br />";
             /*
-              if (this.allowRankingChange) {
-              // Disable option to change ranking approach for now.
-              if (this.useDenseRankings) {
-              s += '<em><a class="only_these_areas" onClick="deactivateDenseRankings(); return false;"><font color="blue"><b>Using dense rankings. Click to use competition rankings.</b></font></a><em>';
-              } else {
-              s += '<em><a class="only_these_areas" onClick="activateDenseRankings(); return false;"><font color="blue"><b>Using competition rankings. Click to use dense rankings.</b></font></a></em>';
-              }
-              }
-            */
+                    if (this.allowRankingChange) {
+                    // Disable option to change ranking approach for now.
+                    if (this.useDenseRankings) {
+                    s += '<em><a class="only_these_areas" onClick="deactivateDenseRankings(); return false;"><font color="blue"><b>Using dense rankings. Click to use competition rankings.</b></font></a><em>';
+                    } else {
+                    s += '<em><a class="only_these_areas" onClick="activateDenseRankings(); return false;"><font color="blue"><b>Using competition rankings. Click to use dense rankings.</b></font></a></em>';
+                    }
+                    }
+                  */
             s += "</div>" + "</div>" + "\n";
             s += "<br>" + "</body>" + "</html>";
         }
         else {
             /* Nothing selected. */
-            s = "<h3>Please select at least one area by clicking one or more checkboxes.</h3>";
+            s =
+                "<h3>Please select at least one area by clicking one or more checkboxes.</h3>";
         }
         return s;
     }
@@ -1337,17 +1446,17 @@ class CSRankings {
             if (value) {
                 // Turn off all next tier venues.
                 if (item in CSRankings.nextTier) {
-                    $(str).prop('checked', false);
+                    $(str).prop("checked", false);
                 }
                 else {
-                    $(str).prop('checked', true);
-                    $(str).prop('disabled', false);
+                    $(str).prop("checked", true);
+                    $(str).prop("disabled", false);
                 }
             }
             else {
                 // turn everything off.
-                $(str).prop('checked', false);
-                $(str).prop('disabled', false);
+                $(str).prop("checked", false);
+                $(str).prop("disabled", false);
             }
         }
     }
@@ -1369,34 +1478,134 @@ class CSRankings {
         this.computeStats(deptNames, numAreas, currentWeights);
         // Compute per-faculty marginal contribution to their department's score.
         // Marginal = current_dept_score - dept_score_without_person
+        // IMPROVED: Calculate area-specific marginals to avoid double-counting multi-area researchers
         this.facultyMarginal = {};
+        this.facultyMarginalByArea = {};
         if (numAreas > 0) {
             for (const dept in deptNames) {
                 if (!deptNames.hasOwnProperty(dept))
                     continue;
                 for (const name of deptNames[dept]) {
-                    let prod = 1.0;
+                    // Calculate area-specific marginals (one area at a time)
+                    this.facultyMarginalByArea[name] = {};
+                    let areaMarginals = [];
                     for (const area in CSRankings.topLevelAreas) {
                         if (currentWeights[area] === 0)
                             continue;
                         const areaDept = area + dept;
-                        const total = (areaDept in this.areaDeptAdjustedCount) ? this.areaDeptAdjustedCount[areaDept] : 0;
-                        const contrib = (name in this.facultyAreaAdjustedCount && area in this.facultyAreaAdjustedCount[name]) ? this.facultyAreaAdjustedCount[name][area] : 0;
-                        const remainder = Math.max(0, total - contrib);
-                        prod *= (remainder + 1.0);
+                        const total = areaDept in this.areaDeptAdjustedCount
+                            ? this.areaDeptAdjustedCount[areaDept]
+                            : 0;
+                        const contrib = name in this.facultyAreaAdjustedCount &&
+                            area in this.facultyAreaAdjustedCount[name]
+                            ? this.facultyAreaAdjustedCount[name][area]
+                            : 0;
+                        if (contrib > 0) {
+                            // Calculate marginal for THIS area only (remove faculty from this area, keep others)
+                            let prod = 1.0;
+                            for (const a in CSRankings.topLevelAreas) {
+                                if (currentWeights[a] === 0)
+                                    continue;
+                                const aDept = a + dept;
+                                const aTotal = aDept in this.areaDeptAdjustedCount
+                                    ? this.areaDeptAdjustedCount[aDept]
+                                    : 0;
+                                let aRemainder = aTotal;
+                                // Only remove this faculty from the current area being evaluated
+                                if (a === area) {
+                                    aRemainder = Math.max(0, aTotal - contrib);
+                                }
+                                prod *= aRemainder + 1.0;
+                            }
+                            const newstat = Math.pow(prod, 1 / numAreas);
+                            const marginalArea = Math.max(0, this.stats[dept] - newstat);
+                            this.facultyMarginalByArea[name][area] = marginalArea;
+                            areaMarginals.push({ area, marginal: marginalArea, contrib });
+                        }
                     }
-                    const newstat = Math.pow(prod, 1 / numAreas);
-                    const marginal = Math.max(0, this.stats[dept] - newstat); // avoid negative from floating error
-                    this.facultyMarginal[name] = marginal;
+                    // Disambiguate: Choose method based on user selection
+                    if (areaMarginals.length > 0) {
+                        switch (this.marginalCalculationMethod) {
+                            case "weighted":
+                                // Weighted average: Weight by contribution size
+                                let weightedSum = 0;
+                                let totalWeight = 0;
+                                for (const am of areaMarginals) {
+                                    weightedSum += am.marginal * am.contrib;
+                                    totalWeight += am.contrib;
+                                }
+                                this.facultyMarginal[name] =
+                                    totalWeight > 0 ? weightedSum / totalWeight : 0;
+                                break;
+                            case "primary":
+                                // Primary area only: Only count contribution to their main area
+                                const primaryAreaKey = this.getPrimaryResearchAreaKey(name);
+                                if (primaryAreaKey &&
+                                    primaryAreaKey in this.facultyMarginalByArea[name]) {
+                                    this.facultyMarginal[name] =
+                                        this.facultyMarginalByArea[name][primaryAreaKey];
+                                }
+                                else if (areaMarginals.length > 0) {
+                                    // Fallback to first area if primary not found
+                                    this.facultyMarginal[name] = areaMarginals[0].marginal;
+                                }
+                                else {
+                                    this.facultyMarginal[name] = 0;
+                                }
+                                break;
+                            case "original":
+                                // Original method: Remove from all areas at once (can double-count)
+                                let prod = 1.0;
+                                for (const area in CSRankings.topLevelAreas) {
+                                    if (currentWeights[area] === 0)
+                                        continue;
+                                    const areaDept = area + dept;
+                                    const total = areaDept in this.areaDeptAdjustedCount
+                                        ? this.areaDeptAdjustedCount[areaDept]
+                                        : 0;
+                                    const contrib = name in this.facultyAreaAdjustedCount &&
+                                        area in this.facultyAreaAdjustedCount[name]
+                                        ? this.facultyAreaAdjustedCount[name][area]
+                                        : 0;
+                                    const remainder = Math.max(0, total - contrib);
+                                    prod *= remainder + 1.0;
+                                }
+                                const newstat = Math.pow(prod, 1 / numAreas);
+                                this.facultyMarginal[name] = Math.max(0, this.stats[dept] - newstat);
+                                break;
+                        }
+                    }
+                    else {
+                        // Fallback: original method (remove from all areas at once)
+                        let prod = 1.0;
+                        for (const area in CSRankings.topLevelAreas) {
+                            if (currentWeights[area] === 0)
+                                continue;
+                            const areaDept = area + dept;
+                            const total = areaDept in this.areaDeptAdjustedCount
+                                ? this.areaDeptAdjustedCount[areaDept]
+                                : 0;
+                            const contrib = name in this.facultyAreaAdjustedCount &&
+                                area in this.facultyAreaAdjustedCount[name]
+                                ? this.facultyAreaAdjustedCount[name][area]
+                                : 0;
+                            const remainder = Math.max(0, total - contrib);
+                            prod *= remainder + 1.0;
+                        }
+                        const newstat = Math.pow(prod, 1 / numAreas);
+                        this.facultyMarginal[name] = Math.max(0, this.stats[dept] - newstat);
+                    }
                 }
             }
         }
+        // Store deptNames for analysis
+        this.currentDeptNames = deptNames;
         const univtext = this.buildDropDown(deptNames, facultycount, facultyAdjustedCount, this.facultyMarginal);
         /* Start building up the string to output. */
         const s = this.buildOutputString(numAreas, this.countryAbbrv, deptCounts, deptNames, // ADD this parameter
         univtext, CSRankings.minToRank, this.facultyMarginal);
         let stop = performance.now();
-        console.log(`Before render: rank took ${(stop - start)} milliseconds.`);
+        console.log(`Before render: rank took ${stop - start} milliseconds.`);
         /* Finally done. Redraw! */
         document.getElementById("success").innerHTML = s;
         $("div").scroll(function () {
@@ -1418,20 +1627,20 @@ class CSRankings {
         const str = this.updatedURL();
         this.navigoRouter.navigate(str);
         stop = performance.now();
-        console.log(`Rank took ${(stop - start)} milliseconds.`);
+        console.log(`Rank took ${stop - start} milliseconds.`);
         return false;
     }
     /* Turn the chart display on or off. */
     toggleChart(name) {
         const chart = document.getElementById(name + "-chart");
         const chartwidget = document.getElementById(name + "-chartwidget");
-        if (chart.style.display === 'block') {
-            chart.style.display = 'none';
-            chart.innerHTML = '';
+        if (chart.style.display === "block") {
+            chart.style.display = "none";
+            chart.innerHTML = "";
             chartwidget.innerHTML = this.ChartIcon;
         }
         else {
-            chart.style.display = 'block';
+            chart.style.display = "block";
             this.makeChart(name, this.usePieChart);
             chartwidget.innerHTML = this.OpenChartIcon;
         }
@@ -1440,12 +1649,12 @@ class CSRankings {
     toggleConferences(area) {
         const e = document.getElementById(area + "-conferences");
         const widget = document.getElementById(area + "-widget");
-        if (e.style.display === 'block') {
-            e.style.display = 'none';
+        if (e.style.display === "block") {
+            e.style.display = "none";
             widget.innerHTML = this.RightTriangle;
         }
         else {
-            e.style.display = 'block';
+            e.style.display = "block";
             widget.innerHTML = this.DownTriangle;
         }
     }
@@ -1453,12 +1662,12 @@ class CSRankings {
     toggleFaculty(dept) {
         const e = document.getElementById(dept + "-faculty");
         const widget = document.getElementById(dept + "-widget");
-        if (e.style.display === 'block') {
-            e.style.display = 'none';
+        if (e.style.display === "block") {
+            e.style.display = "none";
             widget.innerHTML = this.RightTriangle;
         }
         else {
-            e.style.display = 'block';
+            e.style.display = "block";
             widget.innerHTML = this.DownTriangle;
         }
     }
@@ -1471,17 +1680,436 @@ class CSRankings {
         this.rank(false);
         // Keep the faculty section expanded if it was already open
         const facultyDiv = document.getElementById(dept + "-faculty");
-        if (facultyDiv && facultyDiv.style.display !== 'none') {
+        if (facultyDiv && facultyDiv.style.display !== "none") {
             // It was open, make sure it stays open after re-rank
             setTimeout(() => {
                 const e = document.getElementById(dept + "-faculty");
                 const widget = document.getElementById(dept + "-widget");
                 if (e && widget) {
-                    e.style.display = 'block';
+                    e.style.display = "block";
                     widget.innerHTML = this.DownTriangle;
                 }
             }, 0);
         }
+    }
+    /* Get the primary research area for a faculty member */
+    getPrimaryResearchArea(name) {
+        if (!this.authorAreas[name]) {
+            return "Unknown";
+        }
+        // Aggregate areas similar to areaString logic
+        let datadict = {};
+        const keys = CSRankings.topTierAreas;
+        for (let key in keys) {
+            const value = this.authorAreas[name][key];
+            if (key in CSRankings.parentMap) {
+                key = CSRankings.parentMap[key];
+            }
+            if (value > 0) {
+                const displayKey = this.areaDict[key] || key;
+                if (!(displayKey in datadict)) {
+                    datadict[displayKey] = 0;
+                }
+                datadict[displayKey] += value;
+            }
+        }
+        // Find the area with maximum count
+        let maxArea = "Unknown";
+        let maxCount = 0;
+        for (const area in datadict) {
+            if (datadict[area] > maxCount) {
+                maxCount = datadict[area];
+                maxArea = area;
+            }
+        }
+        return maxArea;
+    }
+    /* Get the primary research area key (internal key, not display name) */
+    getPrimaryResearchAreaKey(name) {
+        if (!this.authorAreas[name]) {
+            return null;
+        }
+        // Find the area with maximum contribution
+        let maxArea = null;
+        let maxCount = 0;
+        for (let key in CSRankings.topTierAreas) {
+            const value = this.authorAreas[name][key];
+            if (value > maxCount) {
+                maxCount = value;
+                // Map to parent area if it's a child
+                if (key in CSRankings.parentMap) {
+                    maxArea = CSRankings.parentMap[key];
+                }
+                else {
+                    maxArea = key;
+                }
+            }
+        }
+        return maxArea;
+    }
+    /* Set the marginal calculation method */
+    setMarginalMethod(method) {
+        this.marginalCalculationMethod = method;
+        console.log(`Marginal calculation method set to: ${method}`);
+    }
+    /* Analyze top 40 schools: find faculty with highest marginal delta and their research areas */
+    analyzeTop40MarginalDelta(topN = 5) {
+        console.log("Starting analyzeTop40MarginalDelta...");
+        try {
+            // Get the selected method from the dropdown if available
+            const methodSelect = document.getElementById("marginal-method");
+            if (methodSelect) {
+                this.marginalCalculationMethod = methodSelect.value;
+            }
+            console.log(`Using marginal calculation method: ${this.marginalCalculationMethod}`);
+            // First ensure ranking is computed (this populates this.facultyMarginal, this.stats, this.currentDeptNames)
+            this.rank(false);
+            console.log("Ranking computed successfully");
+            // Get sorted list of schools
+            const sortedSchools = this.sortIndex(this.stats);
+            const top40Schools = sortedSchools.slice(0, 40);
+            // Use stored deptNames from the last rank() call
+            const deptNames = this.currentDeptNames;
+            // Analyze: For each top 40 school, find top N faculty by marginal delta
+            const areaCounts = {};
+            const top5AreaCounts = {};
+            for (const school of top40Schools) {
+                if (!(school in deptNames))
+                    continue;
+                const faculty = deptNames[school];
+                // Sort faculty by marginal delta
+                const facultyWithMarginal = faculty
+                    .map((name) => ({
+                    name,
+                    marginal: this.facultyMarginal[name] || 0,
+                }))
+                    .filter((f) => f.marginal > 0)
+                    .sort((a, b) => b.marginal - a.marginal);
+                // Get top 1 (highest marginal delta)
+                if (facultyWithMarginal.length > 0) {
+                    const topFaculty = facultyWithMarginal[0];
+                    const primaryArea = this.getPrimaryResearchArea(topFaculty.name);
+                    areaCounts[primaryArea] = (areaCounts[primaryArea] || 0) + 1;
+                }
+                // Get top N faculty
+                const topNFaculty = facultyWithMarginal.slice(0, topN);
+                for (const f of topNFaculty) {
+                    const primaryArea = this.getPrimaryResearchArea(f.name);
+                    top5AreaCounts[primaryArea] = (top5AreaCounts[primaryArea] || 0) + 1;
+                }
+            }
+            // Create detailed table showing top faculty for verification
+            this.createTopFacultyTable(top40Schools, deptNames, topN);
+            // Create visualizations
+            console.log("Area counts for top 1:", areaCounts);
+            console.log("Area counts for top 5:", top5AreaCounts);
+            this.createMarginalDeltaChart(areaCounts, "Top 1 Faculty per School (Top 40)", "marginal-delta-chart-1");
+            this.createMarginalDeltaChart(top5AreaCounts, `Top ${topN} Faculty per School (Top 40)`, "marginal-delta-chart-5");
+            console.log("Charts created successfully");
+        }
+        catch (error) {
+            console.error("Error in analyzeTop40MarginalDelta:", error);
+            alert("Error running analysis. Check console for details.");
+        }
+    }
+    /* Create a bar chart for marginal delta analysis */
+    createMarginalDeltaChart(areaCounts, title, chartId) {
+        console.log(`Creating chart: ${title} with data:`, areaCounts);
+        // Convert to array format for Vega-Lite
+        const data = Object.keys(areaCounts)
+            .map((area) => ({
+            area: area,
+            count: areaCounts[area],
+        }))
+            .sort((a, b) => b.count - a.count);
+        if (data.length === 0) {
+            console.warn(`No data for chart: ${title}`);
+            return;
+        }
+        // Get colors for areas
+        const areaColors = {};
+        [
+            ...this.aiAreas,
+            ...this.systemsAreas,
+            ...this.theoryAreas,
+            ...this.interdisciplinaryAreas,
+        ].forEach((key) => {
+            const displayName = this.areaDict[key];
+            if (key in this.aiAreas) {
+                areaColors[displayName] = "#377eb8";
+            }
+            else if (key in this.systemsAreas) {
+                areaColors[displayName] = "#ff7f00";
+            }
+            else if (key in this.theoryAreas) {
+                areaColors[displayName] = "#4daf4a";
+            }
+            else {
+                areaColors[displayName] = "#984ea3";
+            }
+        });
+        const colors = data.map((d) => areaColors[d.area] || "#95a5a6");
+        const vegaLiteSpec = {
+            $schema: "https://vega.github.io/schema/vega-lite/v5.json",
+            title: title,
+            data: { values: data },
+            mark: "bar",
+            encoding: {
+                x: {
+                    field: "area",
+                    type: "nominal",
+                    sort: { field: "count", order: "descending" },
+                    axis: { title: "Research Area" },
+                },
+                y: {
+                    field: "count",
+                    type: "quantitative",
+                    axis: { title: "Number of Faculty" },
+                },
+                tooltip: [
+                    { field: "area", type: "nominal", title: "Area" },
+                    { field: "count", type: "quantitative", title: "Count" },
+                ],
+                color: {
+                    field: "area",
+                    type: "nominal",
+                    scale: { range: colors },
+                    legend: null,
+                },
+            },
+            width: 800,
+            height: 400,
+        };
+        // Create or update the chart container
+        let chartContainer = document.getElementById(chartId);
+        if (!chartContainer) {
+            chartContainer = document.createElement("div");
+            chartContainer.id = chartId;
+            chartContainer.style.margin = "20px 0";
+            chartContainer.style.padding = "10px";
+            chartContainer.style.backgroundColor = "#f9f9f9";
+            chartContainer.style.borderRadius = "5px";
+            // Try to insert after the success div, or append to body if not found
+            const successDiv = document.getElementById("success");
+            if (successDiv && successDiv.parentNode) {
+                successDiv.parentNode.insertBefore(chartContainer, successDiv.nextSibling);
+            }
+            else {
+                document.body.appendChild(chartContainer);
+            }
+        }
+        // Check if vegaEmbed is available
+        if (typeof vegaEmbed === "undefined") {
+            console.error("vegaEmbed is not defined. Make sure vega-embed library is loaded.");
+            alert("Chart library not loaded. Please refresh the page.");
+            return;
+        }
+        console.log(`Embedding chart in #${chartId}`);
+        vegaEmbed(`#${chartId}`, vegaLiteSpec, { actions: false })
+            .then(() => {
+            console.log(`Chart ${chartId} embedded successfully`);
+        })
+            .catch((error) => {
+            console.error(`Error embedding chart ${chartId}:`, error);
+        });
+    }
+    /* Create a detailed table showing top faculty by marginal delta for verification */
+    createTopFacultyTable(top40Schools, deptNames, topN) {
+        // Create container for the table
+        let tableContainer = document.getElementById("top-faculty-table-container");
+        if (!tableContainer) {
+            tableContainer = document.createElement("div");
+            tableContainer.id = "top-faculty-table-container";
+            tableContainer.style.margin = "20px 0";
+            tableContainer.style.padding = "15px";
+            tableContainer.style.backgroundColor = "#f9f9f9";
+            tableContainer.style.borderRadius = "5px";
+            tableContainer.style.border = "1px solid #ddd";
+            const successDiv = document.getElementById("success");
+            if (successDiv && successDiv.parentNode) {
+                successDiv.parentNode.insertBefore(tableContainer, successDiv);
+            }
+            else {
+                document.body.appendChild(tableContainer);
+            }
+        }
+        // Determine if we're using disambiguated (weighted) or original (ambiguous)
+        const isDisambiguated = this.marginalCalculationMethod === "weighted";
+        // Build the table HTML
+        let tableHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px;">
+        <h3 style="margin: 0; flex: 1; min-width: 200px;">Top Faculty by Marginal Delta (Top 40 Schools)</h3>
+        <button id="toggle-marginal-method-btn" onclick="(function() {
+          if (typeof csr !== 'undefined') { 
+            const currentMethod = csr.marginalCalculationMethod || 'weighted';
+            const newMethod = currentMethod === 'weighted' ? 'original' : 'weighted';
+            console.log('Toggling from', currentMethod, 'to', newMethod);
+            csr.setMarginalMethod(newMethod);
+            const dropdown = document.getElementById('marginal-method');
+            if (dropdown) dropdown.value = newMethod;
+            csr.analyzeTop40MarginalDelta(5);
+          } else {
+            console.error('csr is not defined');
+            alert('Error: Analysis system not loaded. Please refresh the page.');
+          }
+        })(); return false;" 
+        style="background-color: ${isDisambiguated ? "#4CAF50" : "#ff9800"}; 
+                color: white; 
+                padding: 10px 20px; 
+                border: none; 
+                border-radius: 4px; 
+                cursor: pointer; 
+                font-size: 13px; 
+                font-weight: bold;
+                white-space: nowrap;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                transition: background-color 0.3s;">
+          ${isDisambiguated
+            ? "Switch to Original (Ambiguous)"
+            : "Switch to Disambiguated"}
+        </button>
+      </div>
+      <p style="font-size: 12px; color: #666;">
+        This table shows the most influential faculty members (by marginal delta) for each of the top 40 schools.
+        <strong>Current method: ${this.marginalCalculationMethod === "weighted"
+            ? "Disambiguated (Weighted Average)"
+            : this.marginalCalculationMethod === "primary"
+                ? "Primary Area Only"
+                : "Original (Ambiguous - All Areas)"}</strong>
+      </p>
+      <div style="overflow-x: auto; max-height: 600px; overflow-y: auto;">
+        <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+          <thead style="position: sticky; top: 0; background-color: #fff; z-index: 10;">
+            <tr style="border-bottom: 2px solid #333;">
+              <th style="padding: 8px; text-align: left; border: 1px solid #ddd;">Rank</th>
+              <th style="padding: 8px; text-align: left; border: 1px solid #ddd;">School</th>
+              <th style="padding: 8px; text-align: left; border: 1px solid #ddd;">Faculty Name</th>
+              <th style="padding: 8px; text-align: right; border: 1px solid #ddd;">Marginal Δ<br/><small>(${isDisambiguated ? "Disambiguated" : "Original"})</small></th>
+              <th style="padding: 8px; text-align: left; border: 1px solid #ddd;">Primary Area</th>
+              <th style="padding: 8px; text-align: left; border: 1px solid #ddd;">All Areas</th>
+            </tr>
+          </thead>
+          <tbody>
+    `;
+        // For each school, show top N faculty
+        for (let i = 0; i < top40Schools.length; i++) {
+            const school = top40Schools[i];
+            if (!(school in deptNames))
+                continue;
+            const faculty = deptNames[school];
+            const facultyWithMarginal = faculty
+                .map((name) => ({
+                name,
+                marginal: this.facultyMarginal[name] || 0,
+            }))
+                .filter((f) => f.marginal > 0)
+                .sort((a, b) => b.marginal - a.marginal);
+            const topNFaculty = facultyWithMarginal.slice(0, topN);
+            if (topNFaculty.length > 0) {
+                // Show school name only for the first row of each school
+                let schoolNameShown = false;
+                for (let j = 0; j < topNFaculty.length; j++) {
+                    const f = topNFaculty[j];
+                    const primaryArea = this.getPrimaryResearchArea(f.name);
+                    const isTop1 = j === 0;
+                    // Get area-specific marginals for this faculty
+                    let areaMarginalsList = "";
+                    if (f.name in this.facultyMarginalByArea) {
+                        const areas = Object.keys(this.facultyMarginalByArea[f.name])
+                            .map((area) => {
+                            const areaName = this.areaDict[area] || area;
+                            const marginal = this.facultyMarginalByArea[f.name][area];
+                            return `${areaName}: ${marginal.toFixed(2)}`;
+                        })
+                            .join(", ");
+                        areaMarginalsList = areas || "N/A";
+                    }
+                    tableHTML += `
+            <tr style="background-color: ${isTop1 ? "#e8f5e9" : "#fff"}; border-bottom: 1px solid #ddd;">
+              <td style="padding: 6px; border: 1px solid #ddd; ${!schoolNameShown ? "font-weight: bold;" : ""}">${!schoolNameShown ? i + 1 : ""}</td>
+              <td style="padding: 6px; border: 1px solid #ddd; ${!schoolNameShown ? "font-weight: bold;" : ""}">${!schoolNameShown ? school : ""}</td>
+              <td style="padding: 6px; border: 1px solid #ddd;">
+                ${f.name} ${isTop1
+                        ? '<strong style="color: #2e7d32;">(Top 1)</strong>'
+                        : `(#${j + 1})`}
+              </td>
+              <td style="padding: 6px; border: 1px solid #ddd; text-align: right; font-family: monospace; font-weight: bold;">${f.marginal.toFixed(2)}</td>
+              <td style="padding: 6px; border: 1px solid #ddd;">${primaryArea}</td>
+              <td style="padding: 6px; border: 1px solid #ddd; font-size: 10px; color: #666;">${areaMarginalsList}</td>
+            </tr>
+          `;
+                    if (!schoolNameShown) {
+                        schoolNameShown = true;
+                    }
+                }
+            }
+        }
+        tableHTML += `
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size: 11px; color: #666; margin-top: 10px;">
+        <strong>Note:</strong> Green rows indicate the #1 most influential faculty member for each school. 
+        ${isDisambiguated
+            ? '<strong>Marginal Δ (Disambiguated)</strong> uses a weighted average of area-specific marginals to avoid double-counting faculty who publish in multiple areas. The "All Areas" column shows the marginal contribution per area. This prevents multi-area researchers from being overcounted.'
+            : "<strong>Marginal Δ (Original)</strong> calculates the marginal by removing the faculty from all areas simultaneously. This method may double-count faculty who publish in multiple areas, as it doesn't account for area-specific contributions separately."}
+      </p>
+    `;
+        tableContainer.innerHTML = tableHTML;
+        console.log("Top faculty table created successfully");
+    }
+    // Add this method to the CSRankings class to toggle between methods
+    toggleMarginalMethod() {
+        // Cycle through methods: weighted -> primary -> original -> weighted
+        const methods = [
+            "weighted",
+            "primary",
+            "original"
+        ];
+        const currentIndex = methods.indexOf(this.marginalCalculationMethod);
+        const nextIndex = (currentIndex + 1) % methods.length;
+        this.marginalCalculationMethod = methods[nextIndex];
+        // Update the dropdown if it exists
+        const dropdown = document.getElementById("marginal-method");
+        if (dropdown) {
+            dropdown.value = this.marginalCalculationMethod;
+        }
+        // Re-rank to apply the new method
+        this.rank();
+        // Show a notification
+        this.showMethodNotification();
+    }
+    // Add this helper method to show which method is active
+    showMethodNotification() {
+        const methodNames = {
+            weighted: "Disambiguated (Weighted Average)",
+            primary: "Primary Area Only",
+            original: "Original (All Areas - May Double-Count)"
+        };
+        const notification = document.createElement("div");
+        notification.style.position = "fixed";
+        notification.style.top = "20px";
+        notification.style.right = "20px";
+        notification.style.padding = "15px 20px";
+        notification.style.backgroundColor = this.marginalCalculationMethod === "weighted"
+            ? "#4CAF50"
+            : this.marginalCalculationMethod === "primary"
+                ? "#2196F3"
+                : "#ff9800";
+        notification.style.color = "white";
+        notification.style.borderRadius = "5px";
+        notification.style.boxShadow = "0 2px 5px rgba(0,0,0,0.2)";
+        notification.style.zIndex = "10000";
+        notification.style.fontWeight = "bold";
+        notification.innerHTML = `Using: ${methodNames[this.marginalCalculationMethod]}`;
+        document.body.appendChild(notification);
+        setTimeout(() => {
+            notification.style.transition = "opacity 0.5s";
+            notification.style.opacity = "0";
+            setTimeout(() => {
+                document.body.removeChild(notification);
+            }, 500);
+        }, 2000);
     }
     activateAll(value = true) {
         this.setAllOn(value);
@@ -1517,7 +2145,7 @@ class CSRankings {
     }
     // Update the URL according to the selected checkboxes.
     updatedURL() {
-        let s = '';
+        let s = "";
         let count = 0;
         let totalParents = 0;
         for (let i = 0; i < this.fields.length; i++) {
@@ -1525,7 +2153,7 @@ class CSRankings {
             if (!(this.fields[i] in CSRankings.parentMap)) {
                 totalParents += 1;
             }
-            if ($(str).prop('checked')) {
+            if ($(str).prop("checked")) {
                 // Only add parents.
                 if (!(this.fields[i] in CSRankings.parentMap)) {
                     // And only add if every top tier child is checked
@@ -1534,7 +2162,7 @@ class CSRankings {
                     let allChecked = 1;
                     if (this.fields[i] in CSRankings.childMap) {
                         CSRankings.childMap[this.fields[i]].forEach((k) => {
-                            let val = $(`input[name=${k}]`).prop('checked');
+                            let val = $(`input[name=${k}]`).prop("checked");
                             if (!(k in CSRankings.nextTier)) {
                                 allChecked &= val;
                             }
@@ -1555,21 +2183,21 @@ class CSRankings {
             s = s.slice(0, -1);
         }
         const region = $("#regions").find(":selected").val();
-        let start = '';
+        let start = "";
         // Check the dates.
         const d = new Date();
         const currYear = d.getFullYear();
         const startyear = parseInt($("#fromyear").find(":selected").text());
         const endyear = parseInt($("#toyear").find(":selected").text());
-        if ((startyear != currYear - 10) || (endyear != currYear)) {
+        if (startyear != currYear - 10 || endyear != currYear) {
             start += `/fromyear/${startyear.toString()}`;
             start += `/toyear/${endyear.toString()}`;
         }
         if (count == totalParents) {
-            start += '/index?all'; // Distinguished special URL - default = all selected.
+            start += "/index?all"; // Distinguished special URL - default = all selected.
         }
         else if (count == 0) {
-            start += '/index?none'; // Distinguished special URL - none selected.
+            start += "/index?none"; // Distinguished special URL - none selected.
         }
         else {
             start += `/index?${s}`;
@@ -1591,7 +2219,7 @@ class CSRankings {
             }
             this.ChartIcon = this.PieChartIcon;
             this.OpenChartIcon = this.OpenPieChartIcon;
-            start += '&pie';
+            start += "&pie";
         }
         else {
             this.usePieChart = false;
@@ -1631,58 +2259,58 @@ class CSRankings {
         });
     }
     /*
-      public static geoCheck(): void {
-      // Figure out which country clients are coming from and set
-      // the default region accordingly.
-      let theUrl = 'https://geoip-db.com/jsonp/'; // 'http://freegeoip.net/json/';
-      $.getJSON(theUrl, (result) => {
-      switch (result.country_code) {
-      case "US":
-      case "CN":
-      case "IN":
-      case "KR":
-      case "JP":
-      case "TW":
-      case "SG":
-      $("#regions").val("USA");
-      CSRankings.getInstance().rank();
-      break;
-      default:
-      $("#regions").val("world");
-      CSRankings.getInstance().rank();
-      break;
-      }
-      }).fail(() => {
-      // If we can't find a location (e.g., because this site is
-      // blocked by an ad blocker), just rank anyway.
-      CSRankings.getInstance().rank();
-      });
-      }
-    */
+        public static geoCheck(): void {
+        // Figure out which country clients are coming from and set
+        // the default region accordingly.
+        let theUrl = 'https://geoip-db.com/jsonp/'; // 'http://freegeoip.net/json/';
+        $.getJSON(theUrl, (result) => {
+        switch (result.country_code) {
+        case "US":
+        case "CN":
+        case "IN":
+        case "KR":
+        case "JP":
+        case "TW":
+        case "SG":
+        $("#regions").val("USA");
+        CSRankings.getInstance().rank();
+        break;
+        default:
+        $("#regions").val("world");
+        CSRankings.getInstance().rank();
+        break;
+        }
+        }).fail(() => {
+        // If we can't find a location (e.g., because this site is
+        // blocked by an ad blocker), just rank anyway.
+        CSRankings.getInstance().rank();
+        });
+        }
+      */
     navigation(params, query) {
         if (params !== null) {
             // Set params (fromyear and toyear).
             Object.keys(params).forEach((key) => {
-                $(`#${key}`).prop('value', params[key].toString());
+                $(`#${key}`).prop("value", params[key].toString());
             });
         }
         // Clear everything *unless* there are subsets / below-the-fold selected.
         CSRankings.clearNonSubsetted();
         // Now check everything listed in the query string.
-        let q = query.split('&');
+        let q = query.split("&");
         // If there is an 'all' in the query string, set everything to true.
         const foundAll = q.some((elem) => {
-            return (elem == "all");
+            return elem == "all";
         });
         // For testing: if 'survey' is in the query string, reveal the survey overlay.
         const foundSurvey = q.some((elem) => {
-            return (elem == "survey");
+            return elem == "survey";
         });
         if (foundSurvey) {
             document.getElementById("overlay-survey").style.display = "block";
         }
         const foundNone = q.some((elem) => {
-            return (elem == "none");
+            return elem == "none";
         });
         // Check for regions and strip them out.
         const foundRegion = q.some((elem) => {
@@ -1702,7 +2330,7 @@ class CSRankings {
         }
         // Check for pie chart
         const foundPie = q.some((elem) => {
-            return (elem == "pie");
+            return elem == "pie";
         });
         if (foundPie) {
             $("#charttype").val("pie");
@@ -1712,14 +2340,14 @@ class CSRankings {
             for (const item in CSRankings.topTierAreas) {
                 //		if (!(item in CSRankings.nextTier)) {
                 let str = `input[name=${item}]`;
-                $(str).prop('checked', true);
+                $(str).prop("checked", true);
                 if (item in CSRankings.childMap) {
                     // It's a parent. Enable it.
-                    $(str).prop('disabled', false);
+                    $(str).prop("disabled", false);
                     // and activate all children.
                     CSRankings.childMap[item].forEach((k) => {
                         if (!(k in CSRankings.nextTier)) {
-                            $(`input[name=${k}]`).prop('checked', true);
+                            $(`input[name=${k}]`).prop("checked", true);
                         }
                     });
                 }
@@ -1738,15 +2366,15 @@ class CSRankings {
         CSRankings.clearNonSubsetted();
         // Then, activate the areas in the query.
         for (const item of q) {
-            if ((item != "none") && (item != "")) {
+            if (item != "none" && item != "") {
                 const str = `input[name=${item}]`;
-                $(str).prop('checked', true);
-                $(str).prop('disabled', false);
+                $(str).prop("checked", true);
+                $(str).prop("disabled", false);
                 if (item in CSRankings.childMap) {
                     // Activate all children.
                     CSRankings.childMap[item].forEach((k) => {
                         if (!(k in CSRankings.nextTier)) {
-                            $(`input[name=${k}]`).prop('checked', true);
+                            $(`input[name=${k}]`).prop("checked", true);
                         }
                     });
                 }
@@ -1759,10 +2387,10 @@ class CSRankings {
                 const kids = CSRankings.childMap[item];
                 if (!CSRankings.subsetting(kids)) {
                     const str = `input[name=${item}]`;
-                    $(str).prop('checked', false);
-                    $(str).prop('disabled', false);
+                    $(str).prop("checked", false);
+                    $(str).prop("disabled", false);
                     kids.forEach((item) => {
-                        $(`input[name=${item}]`).prop('checked', false);
+                        $(`input[name=${item}]`).prop("checked", false);
                     });
                 }
             }
@@ -1784,7 +2412,7 @@ class CSRankings {
         let numCheckedAbove = 0;
         aboveFold.forEach((elem) => {
             let str = `input[name=${elem}]`;
-            let val = $(str).prop('checked');
+            let val = $(str).prop("checked");
             if (val) {
                 numCheckedAbove++;
             }
@@ -1792,19 +2420,22 @@ class CSRankings {
         let numCheckedBelow = 0;
         belowFold.forEach((elem) => {
             let str = `input[name=${elem}]`;
-            let val = $(str).prop('checked');
+            let val = $(str).prop("checked");
             if (val) {
                 numCheckedBelow++;
             }
         });
-        const subsettedAbove = ((numCheckedAbove > 0) && (numCheckedAbove < aboveFold.length));
-        const subsettedBelow = ((numCheckedBelow > 0) && (belowFold.length != 0));
+        const subsettedAbove = numCheckedAbove > 0 && numCheckedAbove < aboveFold.length;
+        const subsettedBelow = numCheckedBelow > 0 && belowFold.length != 0;
         return subsettedAbove || subsettedBelow;
     }
     addListeners() {
         ["toyear", "fromyear", "regions", "charttype"].forEach((key) => {
             const widget = document.getElementById(key);
-            widget.addEventListener("change", () => { this.countAuthorAreas(); this.rank(); });
+            widget.addEventListener("change", () => {
+                this.countAuthorAreas();
+                this.rank();
+            });
         });
         // Add listeners for clicks on area widgets (left side of screen)
         // e.g., 'ai'
@@ -1840,7 +2471,7 @@ class CSRankings {
                     let anyChecked = 0;
                     let allChecked = 1;
                     CSRankings.childMap[parent].forEach((k) => {
-                        const val = $(`input[name=${k}]`).prop('checked');
+                        const val = $(`input[name=${k}]`).prop("checked");
                         anyChecked |= val;
                         // allChecked means all top tier conferences
                         // are on and all next tier conferences are
@@ -1855,27 +2486,27 @@ class CSRankings {
                         }
                     });
                     // Activate parent if any checked.
-                    $(strparent).prop('checked', anyChecked);
+                    $(strparent).prop("checked", anyChecked);
                     // Mark the parent as disabled unless all are checked.
                     if (!anyChecked || allChecked) {
-                        $(strparent).prop('disabled', false);
+                        $(strparent).prop("disabled", false);
                     }
                     if (anyChecked && !allChecked) {
-                        $(strparent).prop('disabled', true);
+                        $(strparent).prop("disabled", true);
                     }
                 }
                 else {
                     // Parent: activate or deactivate all children.
-                    const val = $(str).prop('checked');
+                    const val = $(str).prop("checked");
                     if (field in CSRankings.childMap) {
                         for (const child of CSRankings.childMap[field]) {
                             const strchild = `input[name=${child}]`;
                             if (!(child in CSRankings.nextTier)) {
-                                $(strchild).prop('checked', val);
+                                $(strchild).prop("checked", val);
                             }
                             else {
                                 // Always deactivate next tier conferences.
-                                $(strchild).prop('checked', false);
+                                $(strchild).prop("checked", false);
                             }
                         }
                     }
@@ -1885,16 +2516,36 @@ class CSRankings {
         }
         // Add group selectors.
         const listeners = {
-            'all_areas_on': (() => { this.activateAll(); }),
-            'all_areas_off': (() => { this.activateNone(); }),
-            'ai_areas_on': (() => { this.activateAI(); }),
-            'ai_areas_off': (() => { this.deactivateAI(); }),
-            'systems_areas_on': (() => { this.activateSystems(); }),
-            'systems_areas_off': (() => { this.deactivateSystems(); }),
-            'theory_areas_on': (() => { this.activateTheory(); }),
-            'theory_areas_off': (() => { this.deactivateTheory(); }),
-            'other_areas_on': (() => { this.activateOthers(); }),
-            'other_areas_off': (() => { this.deactivateOthers(); })
+            all_areas_on: () => {
+                this.activateAll();
+            },
+            all_areas_off: () => {
+                this.activateNone();
+            },
+            ai_areas_on: () => {
+                this.activateAI();
+            },
+            ai_areas_off: () => {
+                this.deactivateAI();
+            },
+            systems_areas_on: () => {
+                this.activateSystems();
+            },
+            systems_areas_off: () => {
+                this.deactivateSystems();
+            },
+            theory_areas_on: () => {
+                this.activateTheory();
+            },
+            theory_areas_off: () => {
+                this.deactivateTheory();
+            },
+            other_areas_on: () => {
+                this.activateOthers();
+            },
+            other_areas_off: () => {
+                this.deactivateOthers();
+            },
         };
         for (const item in listeners) {
             const widget = document.getElementById(item);
@@ -1908,113 +2559,176 @@ CSRankings.minToRank = 30; // initial number to rank --> should be enough to ena
 CSRankings.areas = [];
 CSRankings.topLevelAreas = {};
 CSRankings.topTierAreas = {};
-CSRankings.regions = ["europe", "northamerica", "southamerica", "australasia", "asia", "africa", "world", "ae", "ar", "at", "au", "bd", "be", "br", "ca", "ch", "cl", "cn", "co", "cy", "cz", "de", "dk", "ee", "eg", "es", "fi", "fr", "gr", "hk", "hu", "ie", "il", "in", "ir", "it", "jo", "jp", "kr", "lb", "lk", "lu", "mt", "my", "nl", "no", "nz", "ph", "pk", "pl", "pt", "qa", "ro", "ru", "sa", "se", "sg", "th", "tr", "tw", "uk", "za"];
-CSRankings.nameMatcher = new RegExp('(.*)\\s+\\[(.*)\\]'); // Matches names followed by [X] notes.
+CSRankings.regions = [
+    "europe",
+    "northamerica",
+    "southamerica",
+    "australasia",
+    "asia",
+    "africa",
+    "world",
+    "ae",
+    "ar",
+    "at",
+    "au",
+    "bd",
+    "be",
+    "br",
+    "ca",
+    "ch",
+    "cl",
+    "cn",
+    "co",
+    "cy",
+    "cz",
+    "de",
+    "dk",
+    "ee",
+    "eg",
+    "es",
+    "fi",
+    "fr",
+    "gr",
+    "hk",
+    "hu",
+    "ie",
+    "il",
+    "in",
+    "ir",
+    "it",
+    "jo",
+    "jp",
+    "kr",
+    "lb",
+    "lk",
+    "lu",
+    "mt",
+    "my",
+    "nl",
+    "no",
+    "nz",
+    "ph",
+    "pk",
+    "pl",
+    "pt",
+    "qa",
+    "ro",
+    "ru",
+    "sa",
+    "se",
+    "sg",
+    "th",
+    "tr",
+    "tw",
+    "uk",
+    "za",
+];
+CSRankings.nameMatcher = new RegExp("(.*)\\s+\\[(.*)\\]"); // Matches names followed by [X] notes.
 CSRankings.parentIndex = {}; // For color lookups
 CSRankings.parentMap = {
-    'aaai': 'ai',
-    'ijcai': 'ai',
-    'cvpr': 'vision',
-    'eccv': 'vision',
-    'iccv': 'vision',
-    'icml': 'mlmining',
-    'iclr': 'mlmining',
-    'kdd': 'mlmining',
-    'nips': 'mlmining',
-    'acl': 'nlp',
-    'emnlp': 'nlp',
-    'naacl': 'nlp',
-    'sigir': 'inforet',
-    'www': 'inforet',
-    'asplos': 'arch',
-    'isca': 'arch',
-    'micro': 'arch',
-    'hpca': 'arch', // next tier
-    'ccs': 'sec',
-    'oakland': 'sec',
-    'usenixsec': 'sec',
-    'ndss': 'sec', // next tier (for now)
-    'pets': 'sec', // next tier
-    'vldb': 'mod',
-    'sigmod': 'mod',
-    'icde': 'mod', // next tier
-    'pods': 'mod',
-    'dac': 'da',
-    'iccad': 'da',
-    'emsoft': 'bed',
-    'rtas': 'bed',
-    'rtss': 'bed',
-    'sc': 'hpc',
-    'hpdc': 'hpc',
-    'ics': 'hpc',
-    'mobicom': 'mobile',
-    'mobisys': 'mobile',
-    'sensys': 'mobile',
-    'imc': 'metrics',
-    'sigmetrics': 'metrics',
-    'osdi': 'ops',
-    'sosp': 'ops',
-    'eurosys': 'ops', // next tier (see below)
-    'fast': 'ops', // next tier
-    'usenixatc': 'ops', // next tier
-    'popl': 'plan',
-    'pldi': 'plan',
-    'oopsla': 'plan', // next tier 
-    'icfp': 'plan', // next tier
-    'fse': 'soft',
-    'icse': 'soft',
-    'ase': 'soft', // next tier
-    'issta': 'soft', // next tier
-    'nsdi': 'comm',
-    'sigcomm': 'comm',
-    'siggraph': 'graph',
-    'siggraph-asia': 'graph',
-    'eurographics': 'graph', // next tier
-    'focs': 'act',
-    'soda': 'act',
-    'stoc': 'act',
-    'crypto': 'crypt',
-    'eurocrypt': 'crypt',
-    'cav': 'log',
-    'lics': 'log',
-    'ismb': 'bio',
-    'recomb': 'bio',
-    'ec': 'ecom',
-    'wine': 'ecom',
-    'chiconf': 'chi',
-    'ubicomp': 'chi',
-    'uist': 'chi',
-    'icra': 'robotics',
-    'iros': 'robotics',
-    'rss': 'robotics',
-    'vis': 'visualization',
-    'vr': 'visualization',
-    'sigcse': 'csed'
+    aaai: "ai",
+    ijcai: "ai",
+    cvpr: "vision",
+    eccv: "vision",
+    iccv: "vision",
+    icml: "mlmining",
+    iclr: "mlmining",
+    kdd: "mlmining",
+    nips: "mlmining",
+    acl: "nlp",
+    emnlp: "nlp",
+    naacl: "nlp",
+    sigir: "inforet",
+    www: "inforet",
+    asplos: "arch",
+    isca: "arch",
+    micro: "arch",
+    hpca: "arch", // next tier
+    ccs: "sec",
+    oakland: "sec",
+    usenixsec: "sec",
+    ndss: "sec", // next tier (for now)
+    pets: "sec", // next tier
+    vldb: "mod",
+    sigmod: "mod",
+    icde: "mod", // next tier
+    pods: "mod",
+    dac: "da",
+    iccad: "da",
+    emsoft: "bed",
+    rtas: "bed",
+    rtss: "bed",
+    sc: "hpc",
+    hpdc: "hpc",
+    ics: "hpc",
+    mobicom: "mobile",
+    mobisys: "mobile",
+    sensys: "mobile",
+    imc: "metrics",
+    sigmetrics: "metrics",
+    osdi: "ops",
+    sosp: "ops",
+    eurosys: "ops", // next tier (see below)
+    fast: "ops", // next tier
+    usenixatc: "ops", // next tier
+    popl: "plan",
+    pldi: "plan",
+    oopsla: "plan", // next tier
+    icfp: "plan", // next tier
+    fse: "soft",
+    icse: "soft",
+    ase: "soft", // next tier
+    issta: "soft", // next tier
+    nsdi: "comm",
+    sigcomm: "comm",
+    siggraph: "graph",
+    "siggraph-asia": "graph",
+    eurographics: "graph", // next tier
+    focs: "act",
+    soda: "act",
+    stoc: "act",
+    crypto: "crypt",
+    eurocrypt: "crypt",
+    cav: "log",
+    lics: "log",
+    ismb: "bio",
+    recomb: "bio",
+    ec: "ecom",
+    wine: "ecom",
+    chiconf: "chi",
+    ubicomp: "chi",
+    uist: "chi",
+    icra: "robotics",
+    iros: "robotics",
+    rss: "robotics",
+    vis: "visualization",
+    vr: "visualization",
+    sigcse: "csed",
 };
 CSRankings.nextTier = {
-    'ase': true,
-    'issta': true,
-    'icde': true,
-    'pods': true,
-    'hpca': true,
-    'ndss': true, // for now
-    'pets': true,
-    'eurosys': true,
-    'eurographics': true,
-    'fast': true,
-    'usenixatc': true,
-    'icfp': true,
-    'oopsla': true,
-    'kdd': true,
+    ase: true,
+    issta: true,
+    icde: true,
+    pods: true,
+    hpca: true,
+    ndss: true, // for now
+    pets: true,
+    eurosys: true,
+    eurographics: true,
+    fast: true,
+    usenixatc: true,
+    icfp: true,
+    oopsla: true,
+    kdd: true,
 };
 CSRankings.childMap = {};
 CSRankings.noteMap = {
-    'Tech': 'https://tech.cornell.edu/',
-    'CBG': 'https://www.cis.mpg.de/cbg/',
-    'INF': 'https://www.cis.mpg.de/mpi-inf/',
-    'IS': 'https://www.cis.mpg.de/is/',
-    'MG': 'https://www.cis.mpg.de/molgen/',
-    'SP': 'https://www.cis.mpg.de/mpi-for-security-and-privacy/',
-    'SWS': 'https://www.cis.mpg.de/mpi-sws/'
+    Tech: "https://tech.cornell.edu/",
+    CBG: "https://www.cis.mpg.de/cbg/",
+    INF: "https://www.cis.mpg.de/mpi-inf/",
+    IS: "https://www.cis.mpg.de/is/",
+    MG: "https://www.cis.mpg.de/molgen/",
+    SP: "https://www.cis.mpg.de/mpi-for-security-and-privacy/",
+    SWS: "https://www.cis.mpg.de/mpi-sws/",
 };
 var csr = new CSRankings();

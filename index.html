@@ -1995,14 +1995,28 @@
 
 	    <!-- end area selection -->
 
-	    <!-- start ranking window -->
-	    
-	    <div class="col-xs-6 col-sm-push-6 col-sm-6 col-md-6 col-lg-6 text-center">
-	      <div id="success">
-	      </div>
-	    </div>
-	    
-	    <!-- end ranking window -->
+    <!-- start ranking window -->
+    
+    <div class="col-xs-6 col-sm-push-6 col-sm-6 col-md-6 col-lg-6 text-center">
+      <div style="margin: 10px 0;">
+        <div style="margin-bottom: 10px;">
+          <label for="marginal-method" style="font-size: 12px; margin-right: 8px;">Marginal Calculation Method:</label>
+          <select id="marginal-method" onchange="if (typeof csr !== 'undefined') { csr.setMarginalMethod(this.value); if (document.getElementById('top-faculty-table-container')) { csr.analyzeTop40MarginalDelta(5); } }" 
+                  style="padding: 5px 10px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px;">
+            <option value="weighted" selected>Weighted Average (Recommended)</option>
+            <option value="primary">Primary Area Only</option>
+            <option value="original">Original (All Areas)</option>
+          </select>
+        </div>
+        <button onclick="if (typeof csr !== 'undefined' && csr.analyzeTop40MarginalDelta) { console.log('Button clicked, calling function...'); csr.analyzeTop40MarginalDelta(5); } else { console.error('csr or analyzeTop40MarginalDelta not found!', typeof csr, csr); alert('Function not loaded. Please refresh the page.'); } return false;" 
+                style="background-color: #4CAF50; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold;">
+          Analyze Top 40: Research Areas of Most Influential Faculty
+        </button>
+      </div>
+      <div id="success">
+      </div>
+    </div>
+    <!-- end ranking window -->
 
 	    
 	  </div>
