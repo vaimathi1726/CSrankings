@@ -2331,6 +2331,271 @@ class CSRankings {
     }
   }
 
+  /* Analyze average marginal delta by research area */
+  public analyzeAverageMarginalDeltaByArea(): void {
+    console.log("Starting analyzeAverageMarginalDeltaByArea...");
+    try {
+      // Get the selected method from the dropdown if available
+      const methodSelect = document.getElementById(
+        "marginal-method"
+      ) as HTMLSelectElement;
+      if (methodSelect) {
+        this.marginalCalculationMethod = methodSelect.value as
+          | "weighted"
+          | "primary"
+          | "original";
+      }
+      console.log(
+        `Using marginal calculation method: ${this.marginalCalculationMethod}`
+      );
+
+      // First ensure ranking is computed
+      this.rank(false);
+      console.log("Ranking computed successfully");
+
+      // Get all faculty with their marginal deltas and primary areas
+      const areaMarginalData: {
+        [area: string]: { total: number; count: number; marginals: number[] };
+      } = {};
+
+      // Iterate through all departments
+      for (const dept in this.currentDeptNames) {
+        const faculty = this.currentDeptNames[dept];
+        const deptScore = this.stats[dept] || 1;
+
+        for (const name of faculty) {
+          const marginal = this.facultyMarginal[name] || 0;
+          if (marginal > 0) {
+            // Calculate marginal delta percentage: [(dept score - dept score without person) / dept score] * 100
+            // Since facultyMarginal is already (dept score - dept score without person), we just divide by dept score
+            const marginalDeltaPercent =
+              deptScore > 0 ? (marginal / deptScore) * 100 : 0;
+
+            const primaryArea = this.getPrimaryResearchArea(name);
+            if (primaryArea && primaryArea !== "Unknown") {
+              if (!(primaryArea in areaMarginalData)) {
+                areaMarginalData[primaryArea] = {
+                  total: 0,
+                  count: 0,
+                  marginals: [],
+                };
+              }
+              areaMarginalData[primaryArea].total += marginalDeltaPercent;
+              areaMarginalData[primaryArea].count += 1;
+              areaMarginalData[primaryArea].marginals.push(
+                marginalDeltaPercent
+              );
+            }
+          }
+        }
+      }
+
+      // Calculate averages
+      const averageMarginals: { [area: string]: number } = {};
+      for (const area in areaMarginalData) {
+        const data = areaMarginalData[area];
+        averageMarginals[area] = data.count > 0 ? data.total / data.count : 0;
+      }
+
+      console.log("Average marginal deltas by area:", averageMarginals);
+      this.createAverageMarginalDeltaChart(
+        averageMarginals,
+        this.marginalCalculationMethod
+      );
+      console.log("Chart created successfully");
+    } catch (error) {
+      console.error("Error in analyzeAverageMarginalDeltaByArea:", error);
+      alert("Error running analysis. Check console for details.");
+    }
+  }
+
+  /* Create a bar chart showing average marginal delta by research area */
+  private createAverageMarginalDeltaChart(
+    averageMarginals: { [area: string]: number },
+    method: "weighted" | "primary" | "original"
+  ): void {
+    const isDisambiguated = method === "weighted";
+    const chartId = "average-marginal-delta-chart";
+
+    console.log(
+      `Creating average marginal delta chart with data:`,
+      averageMarginals
+    );
+
+    // Convert to array format for Vega-Lite
+    const data = Object.keys(averageMarginals)
+      .map((area) => ({
+        area: area,
+        average: averageMarginals[area],
+      }))
+      .filter((d) => d.average > 0) // Only show areas with data
+      .sort((a, b) => b.average - a.average);
+
+    if (data.length === 0) {
+      console.warn("No data for average marginal delta chart");
+      return;
+    }
+
+    // Get colors for areas
+    const areaColors: { [key: string]: string } = {};
+    [
+      ...this.aiAreas,
+      ...this.systemsAreas,
+      ...this.theoryAreas,
+      ...this.interdisciplinaryAreas,
+    ].forEach((key) => {
+      const displayName = this.areaDict[key];
+      if (key in this.aiAreas) {
+        areaColors[displayName] = "#377eb8";
+      } else if (key in this.systemsAreas) {
+        areaColors[displayName] = "#ff7f00";
+      } else if (key in this.theoryAreas) {
+        areaColors[displayName] = "#4daf4a";
+      } else {
+        areaColors[displayName] = "#984ea3";
+      }
+    });
+
+    const colors = data.map((d) => areaColors[d.area] || "#95a5a6");
+
+    const vegaLiteSpec = {
+      $schema: "https://vega.github.io/schema/vega-lite/v5.json",
+      title: `Average Marginal Delta % by Research Area (${
+        isDisambiguated ? "Disambiguated" : "Original"
+      })`,
+      data: { values: data },
+      mark: "bar",
+      encoding: {
+        x: {
+          field: "area",
+          type: "nominal",
+          sort: { field: "average", order: "descending" },
+          axis: { title: "Research Area" },
+        },
+        y: {
+          field: "average",
+          type: "quantitative",
+          axis: { title: "Average Marginal Delta %" },
+        },
+        tooltip: [
+          { field: "area", type: "nominal", title: "Area" },
+          {
+            field: "average",
+            type: "quantitative",
+            title: "Avg Marginal Delta %",
+            format: ".2f",
+          },
+        ],
+        color: {
+          field: "area",
+          type: "nominal",
+          scale: { range: colors },
+          legend: null,
+        },
+      },
+      width: 800,
+      height: 400,
+    };
+
+    // Create or update the chart container
+    let chartContainer = document.getElementById(chartId);
+    if (!chartContainer) {
+      chartContainer = document.createElement("div");
+      chartContainer.id = chartId;
+      chartContainer.style.margin = "20px 0";
+      chartContainer.style.padding = "15px";
+      chartContainer.style.backgroundColor = "#f9f9f9";
+      chartContainer.style.borderRadius = "5px";
+      chartContainer.style.border = "1px solid #ddd";
+
+      // Insert at the end of the parent container (after ranking table and buttons)
+      const successDiv = document.getElementById("success");
+      if (successDiv && successDiv.parentNode) {
+        // Append to parent container, which will place it after the buttons
+        successDiv.parentNode.appendChild(chartContainer);
+      } else {
+        document.body.appendChild(chartContainer);
+      }
+    }
+
+    // Build the chart HTML with toggle button
+    const methodName = isDisambiguated
+      ? "Disambiguated (Weighted Average)"
+      : method === "primary"
+      ? "Primary Area Only"
+      : "Original (Ambiguous - All Areas)";
+
+    let chartHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px;">
+        <h3 style="margin: 0; flex: 1; min-width: 200px;">Average Marginal Delta % by Research Area</h3>
+        <button id="toggle-marginal-method-chart-btn" onclick="(function() {
+          if (typeof csr !== 'undefined') { 
+            const currentMethod = csr.marginalCalculationMethod || 'weighted';
+            const newMethod = currentMethod === 'weighted' ? 'original' : 'weighted';
+            console.log('Toggling from', currentMethod, 'to', newMethod);
+            csr.setMarginalMethod(newMethod);
+            const dropdown = document.getElementById('marginal-method');
+            if (dropdown) dropdown.value = newMethod;
+            csr.analyzeAverageMarginalDeltaByArea();
+          } else {
+            console.error('csr is not defined');
+            alert('Error: Analysis system not loaded. Please refresh the page.');
+          }
+        })(); return false;" 
+        style="background-color: ${isDisambiguated ? "#4CAF50" : "#ff9800"}; 
+                color: white; 
+                padding: 10px 20px; 
+                border: none; 
+                border-radius: 4px; 
+                cursor: pointer; 
+                font-size: 13px; 
+                font-weight: bold;
+                white-space: nowrap;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                transition: background-color 0.3s;">
+          ${
+            isDisambiguated
+              ? "Switch to Original (Ambiguous)"
+              : "Switch to Disambiguated"
+          }
+        </button>
+      </div>
+      <p style="font-size: 12px; color: #666; margin-bottom: 10px;">
+        This chart shows the average marginal delta percentage by research area. 
+        <strong>Current method: ${methodName}</strong>
+      </p>
+      <div id="${chartId}-vega-container"></div>
+      <p style="font-size: 11px; color: #666; margin-top: 10px;">
+        <strong>Note:</strong> Marginal Delta % = [(Department Score - Department Score without Faculty) / Department Score] × 100. 
+        ${
+          isDisambiguated
+            ? "The disambiguated method uses a weighted average of area-specific marginals to avoid double-counting faculty who publish in multiple areas."
+            : "The original method calculates the marginal by removing the faculty from all areas simultaneously, which may double-count researchers who publish across multiple areas."
+        }
+      </p>
+    `;
+
+    chartContainer.innerHTML = chartHTML;
+
+    // Check if vegaEmbed is available
+    if (typeof vegaEmbed === "undefined") {
+      console.error(
+        "vegaEmbed is not defined. Make sure vega-embed library is loaded."
+      );
+      alert("Chart library not loaded. Please refresh the page.");
+      return;
+    }
+
+    console.log(`Embedding chart in #${chartId}-vega-container`);
+    vegaEmbed(`#${chartId}-vega-container`, vegaLiteSpec, { actions: false })
+      .then(() => {
+        console.log(`Chart ${chartId} embedded successfully`);
+      })
+      .catch((error) => {
+        console.error(`Error embedding chart ${chartId}:`, error);
+      });
+  }
+
   /* Create a bar chart for marginal delta analysis */
   private createMarginalDeltaChart(
     areaCounts: { [area: string]: number },
@@ -2415,13 +2680,11 @@ class CSRankings {
       chartContainer.style.backgroundColor = "#f9f9f9";
       chartContainer.style.borderRadius = "5px";
 
-      // Try to insert after the success div, or append to body if not found
+      // Insert at the end of the parent container (after ranking table and buttons)
       const successDiv = document.getElementById("success");
       if (successDiv && successDiv.parentNode) {
-        successDiv.parentNode.insertBefore(
-          chartContainer,
-          successDiv.nextSibling
-        );
+        // Append to parent container, which will place it after the buttons
+        successDiv.parentNode.appendChild(chartContainer);
       } else {
         document.body.appendChild(chartContainer);
       }
@@ -2465,7 +2728,22 @@ class CSRankings {
 
       const successDiv = document.getElementById("success");
       if (successDiv && successDiv.parentNode) {
-        successDiv.parentNode.insertBefore(tableContainer, successDiv);
+        // Find the buttons container (the div after success div)
+        const buttonsDiv = successDiv.nextElementSibling;
+        if (buttonsDiv) {
+          // Insert after the buttons div
+          if (buttonsDiv.nextSibling) {
+            successDiv.parentNode.insertBefore(
+              tableContainer,
+              buttonsDiv.nextSibling
+            );
+          } else {
+            successDiv.parentNode.appendChild(tableContainer);
+          }
+        } else {
+          // If no buttons div, append to parent (after success div)
+          successDiv.parentNode.appendChild(tableContainer);
+        }
       } else {
         document.body.appendChild(tableContainer);
       }
