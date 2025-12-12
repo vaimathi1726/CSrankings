@@ -2001,14 +2001,26 @@
       <div id="success">
       </div>
       <div style="margin: 20px 0;">
-        <div style="margin-bottom: 10px;">
-          <label for="marginal-method" style="font-size: 12px; margin-right: 8px;">Marginal Calculation Method:</label>
-          <select id="marginal-method" onchange="if (typeof csr !== 'undefined') { csr.setMarginalMethod(this.value); if (document.getElementById('top-faculty-table-container')) { csr.analyzeTop40MarginalDelta(5); } }" 
-                  style="padding: 5px 10px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px;">
-            <option value="weighted" selected>Weighted Average (Recommended)</option>
-            <option value="primary">Primary Area Only</option>
-            <option value="original">Original (All Areas)</option>
-          </select>
+        <div style="display: flex; gap: 20px; align-items: flex-start; flex-wrap: wrap;">
+          <div style="flex: 1; min-width: 200px;">
+            <div style="margin-bottom: 10px;">
+              <label for="marginal-method" style="font-size: 12px; margin-right: 8px;">Marginal Calculation Method:</label>
+              <select id="marginal-method" onchange="if (typeof csr !== 'undefined') { csr.setMarginalMethod(this.value); const topFacultyMethod = document.getElementById('top-faculty-table-method'); if (topFacultyMethod) topFacultyMethod.value = this.value; const avgDeltaMethod = document.getElementById('average-marginal-delta-chart-method'); if (avgDeltaMethod) avgDeltaMethod.value = this.value; if (document.getElementById('top-faculty-table-container')) { csr.analyzeTop40MarginalDelta(5); } if (document.getElementById('average-marginal-delta-chart')) { csr.analyzeAverageMarginalDeltaByArea(); } }" 
+                      style="padding: 5px 10px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px;">
+                <option value="weighted" selected>Weighted Average (Recommended)</option>
+                <option value="primary">Primary Area Only</option>
+                <option value="original">Original (All Areas)</option>
+              </select>
+            </div>
+          </div>
+          <div style="flex: 1; min-width: 300px; max-width: 500px; background-color: #f9f9f9; padding: 15px; border-radius: 5px; border: 1px solid #ddd;">
+            <h4 style="margin-top: 0; margin-bottom: 10px; font-size: 14px; font-weight: bold;">Methodology Explanation:</h4>
+            <div style="font-size: 12px; line-height: 1.6;">
+              <p style="margin: 0 0 12px 0;"><strong>Weighted Average (Recommended):</strong> Calculates the marginal contribution as a weighted average across all research areas where the faculty member publishes. The weight for each area is proportional to their contribution size in that area. This method avoids double-counting by properly weighting multi-area researchers based on their actual distribution of work.</p>
+              <p style="margin: 0 0 12px 0;"><strong>Primary Area Only:</strong> Only counts the marginal contribution to the faculty member's primary research area (the area where they have the most publications). This is the most conservative approach and provides a clear, unambiguous measure for each researcher, but may underestimate the impact of researchers who work across multiple areas.</p>
+              <p style="margin: 0;"><strong>Original (All Areas):</strong> Calculates marginal contribution by removing the faculty member from all areas simultaneously. This can lead to double-counting for researchers who contribute to multiple areas, as their removal affects the department score in multiple ways. This method may overestimate impact for multi-area researchers.</p>
+            </div>
+          </div>
         </div>
         <div style="display: flex; flex-direction: column; gap: 10px; align-items: center;">
           <button onclick="if (typeof csr !== 'undefined' && csr.analyzeTop40MarginalDelta) { console.log('Button clicked, calling function...'); csr.analyzeTop40MarginalDelta(5); } else { console.error('csr or analyzeTop40MarginalDelta not found!', typeof csr, csr); alert('Function not loaded. Please refresh the page.'); } return false;" 
@@ -2018,6 +2030,10 @@
           <button onclick="if (typeof csr !== 'undefined' && csr.analyzeAverageMarginalDeltaByArea) { console.log('Button clicked, calling analyzeAverageMarginalDeltaByArea...'); csr.analyzeAverageMarginalDeltaByArea(); } else { console.error('csr or analyzeAverageMarginalDeltaByArea not found!', typeof csr, csr); alert('Function not loaded. Please refresh the page.'); } return false;" 
                   style="background-color: #2196F3; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; width: 100%; max-width: 500px;">
             Average Marginal Delta by Research Area
+          </button>
+          <button onclick="if (typeof csr !== 'undefined' && csr.analyzeAveragePubsByAreaOverTime) { console.log('Button clicked, calling analyzeAveragePubsByAreaOverTime...'); csr.analyzeAveragePubsByAreaOverTime(); } else { console.error('csr or analyzeAveragePubsByAreaOverTime not found!', typeof csr, csr); alert('Function not loaded. Please refresh the page.'); } return false;" 
+                  style="background-color: #9C27B0; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; width: 100%; max-width: 500px;">
+            Average Publications per Faculty by Area Over Time
           </button>
         </div>
       </div>
