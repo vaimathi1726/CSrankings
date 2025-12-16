@@ -2321,13 +2321,13 @@ class CSRankings {
       console.log("Area counts for top 5:", top5AreaCounts);
       this.createMarginalDeltaChart(
         areaCounts,
-        "Top 1 Faculty per School (Top 40)",
+        "Top 1 Faculty per School (Top 40) by Marginal Delta",
         "marginal-delta-chart-1",
         this.marginalCalculationMethod
       );
       this.createMarginalDeltaChart(
         top5AreaCounts,
-        `Top ${topN} Faculty per School (Top 40)`,
+        `Top ${topN} Faculty per School (Top 40) by Marginal Delta`,
         "marginal-delta-chart-5",
         this.marginalCalculationMethod
       );
@@ -2830,7 +2830,7 @@ class CSRankings {
     }
 
     console.log(`Embedding chart in #${chartId}`);
-    vegaEmbed(`#${chartId}`, vegaLiteSpec, { actions: false })
+    vegaEmbed(`#${chartId}`, vegaLiteSpec as any, { actions: false })
       .then(() => {
         console.log(`Chart ${chartId} embedded successfully`);
       })
@@ -2886,13 +2886,11 @@ class CSRankings {
       }
     });
 
-    const colors = data.map((d) => areaColors[d.area] || "#95a5a6");
+    const colors = data.map(() => "#2196F3");
 
     const vegaLiteSpec = {
       $schema: "https://vega.github.io/schema/vega-lite/v5.json",
-      title: `Average Marginal Delta % by Research Area (${
-        isDisambiguated ? "Disambiguated" : "Original"
-      })`,
+      title: `Average Marginal Delta % by Research Area`,
       data: { values: data },
       mark: "bar",
       encoding: {
@@ -2937,75 +2935,20 @@ class CSRankings {
       chartContainer.style.backgroundColor = "#f9f9f9";
       chartContainer.style.borderRadius = "5px";
       chartContainer.style.border = "1px solid #ddd";
+      chartContainer.style.width = "850px";
 
-      // Create header with title and dropdown
+      // Create header with title only
       const headerDiv = document.createElement("div");
-      headerDiv.style.display = "flex";
-      headerDiv.style.justifyContent = "space-between";
-      headerDiv.style.alignItems = "center";
       headerDiv.style.marginBottom = "15px";
-      
+
       const titleDiv = document.createElement("div");
       titleDiv.style.fontSize = "16px";
       titleDiv.style.fontWeight = "bold";
       titleDiv.textContent = "Average Marginal Delta % by Research Area";
-      
-      const methodSelectDiv = document.createElement("div");
-      methodSelectDiv.style.display = "flex";
-      methodSelectDiv.style.alignItems = "center";
-      methodSelectDiv.style.gap = "10px";
-      
-      const methodLabel = document.createElement("label");
-      methodLabel.style.fontSize = "12px";
-      methodLabel.textContent = "Marginal Calculation Method:";
-      methodLabel.setAttribute("for", `${chartId}-method`);
-      
-      const methodSelect = document.createElement("select");
-      methodSelect.id = `${chartId}-method`;
-      methodSelect.style.padding = "5px 10px";
-      methodSelect.style.fontSize = "12px";
-      methodSelect.style.border = "1px solid #ccc";
-      methodSelect.style.borderRadius = "4px";
-      methodSelect.value = method;
-      
-      const option1 = document.createElement("option");
-      option1.value = "weighted";
-      option1.textContent = "Weighted Average (Recommended)";
-      if (method === "weighted") option1.selected = true;
-      
-      const option2 = document.createElement("option");
-      option2.value = "primary";
-      option2.textContent = "Primary Area Only";
-      if (method === "primary") option2.selected = true;
-      
-      const option3 = document.createElement("option");
-      option3.value = "original";
-      option3.textContent = "Original (All Areas)";
-      if (method === "original") option3.selected = true;
-      
-      methodSelect.appendChild(option1);
-      methodSelect.appendChild(option2);
-      methodSelect.appendChild(option3);
-      
-      // Add change handler to update chart
-      methodSelect.addEventListener("change", () => {
-        this.marginalCalculationMethod = methodSelect.value as "weighted" | "primary" | "original";
-        // Sync the main dropdown
-        const mainDropdown = document.getElementById("marginal-method") as HTMLSelectElement;
-        if (mainDropdown) {
-          mainDropdown.value = methodSelect.value;
-        }
-        this.analyzeAverageMarginalDeltaByArea();
-      });
-      
-      methodSelectDiv.appendChild(methodLabel);
-      methodSelectDiv.appendChild(methodSelect);
-      
+
       headerDiv.appendChild(titleDiv);
-      headerDiv.appendChild(methodSelectDiv);
-      
       chartContainer.appendChild(headerDiv);
-      
+
       // Create chart div
       const chartDiv = document.createElement("div");
       chartDiv.id = `${chartId}-chart`;
@@ -3020,13 +2963,17 @@ class CSRankings {
         document.body.appendChild(chartContainer);
       }
     } else {
+      // Update existing container width
+      chartContainer.style.width = "850px";
       // Update existing dropdown value
-      const existingSelect = document.getElementById(`${chartId}-method`) as HTMLSelectElement;
+      const existingSelect = document.getElementById(
+        `${chartId}-method`
+      ) as HTMLSelectElement;
       if (existingSelect) {
         existingSelect.value = method;
       }
     }
-    
+
     // Use the chart div inside the container
     const chartDivId = `${chartId}-chart`;
     const chartDivElement = document.getElementById(chartDivId);
@@ -3035,86 +2982,24 @@ class CSRankings {
       return;
     }
 
-    // If container was just created, we already have the header with dropdown
-    // If it already existed, we need to update the dropdown and clear old content
-    if (chartContainer.querySelector(`#${chartId}-chart`)) {
-      // Container already has our structure, just update dropdown
-      const existingSelect = document.getElementById(`${chartId}-method`) as HTMLSelectElement;
-      if (existingSelect) {
-        existingSelect.value = method;
-      }
-    } else {
+    // If container was just created, we already have the header
+    // If it already existed, we need to clear old content
+    if (!chartContainer.querySelector(`#${chartId}-chart`)) {
       // Old structure exists, replace it
-      chartContainer.innerHTML = '';
-      
-      // Create header with title and dropdown
+      chartContainer.innerHTML = "";
+
+      // Create header with title only
       const headerDiv = document.createElement("div");
-      headerDiv.style.display = "flex";
-      headerDiv.style.justifyContent = "space-between";
-      headerDiv.style.alignItems = "center";
       headerDiv.style.marginBottom = "15px";
-      
+
       const titleDiv = document.createElement("div");
       titleDiv.style.fontSize = "16px";
       titleDiv.style.fontWeight = "bold";
       titleDiv.textContent = "Average Marginal Delta % by Research Area";
-      
-      const methodSelectDiv = document.createElement("div");
-      methodSelectDiv.style.display = "flex";
-      methodSelectDiv.style.alignItems = "center";
-      methodSelectDiv.style.gap = "10px";
-      
-      const methodLabel = document.createElement("label");
-      methodLabel.style.fontSize = "12px";
-      methodLabel.textContent = "Marginal Calculation Method:";
-      methodLabel.setAttribute("for", `${chartId}-method`);
-      
-      const methodSelect = document.createElement("select");
-      methodSelect.id = `${chartId}-method`;
-      methodSelect.style.padding = "5px 10px";
-      methodSelect.style.fontSize = "12px";
-      methodSelect.style.border = "1px solid #ccc";
-      methodSelect.style.borderRadius = "4px";
-      methodSelect.value = method;
-      
-      const option1 = document.createElement("option");
-      option1.value = "weighted";
-      option1.textContent = "Weighted Average (Recommended)";
-      if (method === "weighted") option1.selected = true;
-      
-      const option2 = document.createElement("option");
-      option2.value = "primary";
-      option2.textContent = "Primary Area Only";
-      if (method === "primary") option2.selected = true;
-      
-      const option3 = document.createElement("option");
-      option3.value = "original";
-      option3.textContent = "Original (All Areas)";
-      if (method === "original") option3.selected = true;
-      
-      methodSelect.appendChild(option1);
-      methodSelect.appendChild(option2);
-      methodSelect.appendChild(option3);
-      
-      // Add change handler to update chart
-      methodSelect.addEventListener("change", () => {
-        this.marginalCalculationMethod = methodSelect.value as "weighted" | "primary" | "original";
-        // Sync the main dropdown
-        const mainDropdown = document.getElementById("marginal-method") as HTMLSelectElement;
-        if (mainDropdown) {
-          mainDropdown.value = methodSelect.value;
-        }
-        this.analyzeAverageMarginalDeltaByArea();
-      });
-      
-      methodSelectDiv.appendChild(methodLabel);
-      methodSelectDiv.appendChild(methodSelect);
-      
+
       headerDiv.appendChild(titleDiv);
-      headerDiv.appendChild(methodSelectDiv);
-      
       chartContainer.appendChild(headerDiv);
-      
+
       // Create chart div
       const chartDiv = document.createElement("div");
       chartDiv.id = `${chartId}-chart`;
@@ -3186,7 +3071,7 @@ class CSRankings {
       }
     });
 
-    const colors = data.map((d) => areaColors[d.area] || "#95a5a6");
+    const colors = data.map(() => "#2e7d32");
 
     const vegaLiteSpec = {
       $schema: "https://vega.github.io/schema/vega-lite/v5.json",
@@ -3250,7 +3135,7 @@ class CSRankings {
     }
 
     console.log(`Embedding chart in #${chartId}`);
-    vegaEmbed(`#${chartId}`, vegaLiteSpec, { actions: false })
+    vegaEmbed(`#${chartId}`, vegaLiteSpec as any, { actions: false })
       .then(() => {
         console.log(`Chart ${chartId} embedded successfully`);
       })
@@ -3304,27 +3189,11 @@ class CSRankings {
 
     // Build the table HTML
     let tableHTML = `
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; flex-wrap: wrap; gap: 10px;">
-        <h3 style="margin: 0; flex: 1; min-width: 200px;">Top Faculty by Marginal Delta (Top 40 Schools)</h3>
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <label for="top-faculty-table-method" style="font-size: 12px;">Marginal Calculation Method:</label>
-          <select id="top-faculty-table-method" onchange="if (typeof csr !== 'undefined') { csr.setMarginalMethod(this.value); const mainDropdown = document.getElementById('marginal-method'); if (mainDropdown) mainDropdown.value = this.value; csr.analyzeTop40MarginalDelta(5); }" 
-                  style="padding: 5px 10px; font-size: 12px; border: 1px solid #ccc; border-radius: 4px;">
-            <option value="weighted" ${this.marginalCalculationMethod === "weighted" ? "selected" : ""}>Weighted Average (Recommended)</option>
-            <option value="primary" ${this.marginalCalculationMethod === "primary" ? "selected" : ""}>Primary Area Only</option>
-            <option value="original" ${this.marginalCalculationMethod === "original" ? "selected" : ""}>Original (All Areas)</option>
-          </select>
-        </div>
+      <div style="margin-bottom: 10px;">
+        <h3 style="margin: 0;">Top Faculty by Marginal Delta (Top 40 Schools)</h3>
       </div>
       <p style="font-size: 12px; color: #666;">
         This table shows the most influential faculty members (by marginal delta) for each of the top 40 schools.
-        <strong>Current method: ${
-          this.marginalCalculationMethod === "weighted"
-            ? "Disambiguated (Weighted Average)"
-            : this.marginalCalculationMethod === "primary"
-            ? "Primary Area Only"
-            : "Original (Ambiguous - All Areas)"
-        }</strong>
       </p>
       <div style="overflow-x: auto; max-height: 600px; overflow-y: auto;">
         <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
@@ -3333,9 +3202,7 @@ class CSRankings {
               <th style="padding: 8px; text-align: left; border: 1px solid #ddd;">Rank</th>
               <th style="padding: 8px; text-align: left; border: 1px solid #ddd;">School</th>
               <th style="padding: 8px; text-align: left; border: 1px solid #ddd;">Faculty Name</th>
-              <th style="padding: 8px; text-align: right; border: 1px solid #ddd;">Marginal Δ<br/><small>(${
-                isDisambiguated ? "Disambiguated" : "Original"
-              })</small></th>
+              <th style="padding: 8px; text-align: right; border: 1px solid #ddd;">Marginal Δ</th>
               <th style="padding: 8px; text-align: left; border: 1px solid #ddd;">Primary Area</th>
               <th style="padding: 8px; text-align: left; border: 1px solid #ddd;">All Areas</th>
             </tr>
@@ -3394,7 +3261,7 @@ class CSRankings {
               <td style="padding: 6px; border: 1px solid #ddd;">
                 ${f.name} ${
             isTop1
-              ? '<strong style="color: #2e7d32;">(Top 1)</strong>'
+              ? '<strong style="color: #2e7d32;">(#1)</strong>'
               : `(#${j + 1})`
           }
               </td>
@@ -3417,14 +3284,6 @@ class CSRankings {
           </tbody>
         </table>
       </div>
-      <p style="font-size: 11px; color: #666; margin-top: 10px;">
-        <strong>Note:</strong> Green rows indicate the #1 most influential faculty member for each school. 
-        ${
-          isDisambiguated
-            ? '<strong>Marginal Δ (Disambiguated)</strong> uses a weighted average of area-specific marginals to avoid double-counting faculty who publish in multiple areas. The "All Areas" column shows the marginal contribution per area. This prevents multi-area researchers from being overcounted.'
-            : "<strong>Marginal Δ (Original)</strong> calculates the marginal by removing the faculty from all areas simultaneously. This method may double-count faculty who publish in multiple areas, as it doesn't account for area-specific contributions separately."
-        }
-      </p>
     `;
 
     tableContainer.innerHTML = tableHTML;
